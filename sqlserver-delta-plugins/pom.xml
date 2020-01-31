@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright © 2019 Cask Data, Inc.
+  ~ Copyright © 2020 Cask Data, Inc.
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License"); you may not
   ~ use this file except in compliance with the License. You may obtain a copy of
@@ -25,12 +25,12 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>mysql-delta-plugins</artifactId>
+  <artifactId>sqlserver-delta-plugins</artifactId>
 
   <dependencies>
     <dependency>
       <groupId>io.debezium</groupId>
-      <artifactId>debezium-connector-mysql</artifactId>
+      <artifactId>debezium-connector-sqlserver</artifactId>
       <version>${debezium.version}</version>
     </dependency>
     <dependency>
@@ -49,7 +49,7 @@
         <extensions>true</extensions>
         <configuration>
           <instructions>
-            <_exportcontents>io.cdap.delta.mysql.*</_exportcontents>
+            <_exportcontents>io.cdap.delta.sqlserver.*</_exportcontents>
             <Embed-Dependency>*;inline=false;scope=compile</Embed-Dependency>
             <Embed-Transitive>true</Embed-Transitive>
             <Embed-Directory>lib</Embed-Directory>

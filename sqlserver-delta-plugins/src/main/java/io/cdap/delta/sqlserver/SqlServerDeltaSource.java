@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Cask Data, Inc.
+ * Copyright © 2020 Cask Data, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -14,12 +14,11 @@
  * the License.
  */
 
-package io.cdap.delta.mysql;
+package io.cdap.delta.sqlserver;
 
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.api.annotation.Plugin;
-import io.cdap.cdap.api.plugin.PluginProperties;
 import io.cdap.delta.api.Configurer;
 import io.cdap.delta.api.DeltaSource;
 import io.cdap.delta.api.DeltaSourceContext;
@@ -29,57 +28,43 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
-import io.cdap.delta.common.DriverCleanup;
-
-import java.sql.Driver;
-import java.util.List;
 
 import java.util.List;
 
 /**
- * Mysql origin.
+ * Sql Server delta source.
  */
 @Plugin(type = DeltaSource.PLUGIN_TYPE)
-@Name(MySqlDeltaSource.NAME)
-@Description("Delta source for MySQL.")
-public class MySqlDeltaSource implements DeltaSource {
-  public static final String NAME = "mysql";
-  private final MySqlConfig conf;
+@Name(SqlServerDeltaSource.NAME)
+@Description("Delta source for SqlServer.")
+public class SqlServerDeltaSource implements DeltaSource {
+  public static final String NAME = "sqlserver";
+  private final SqlServerConfig config;
 
-  public MySqlDeltaSource(MySqlConfig conf) {
-    this.conf = conf;
+  public SqlServerDeltaSource(SqlServerConfig config) {
+    this.config = config;
   }
+
 
   @Override
   public void configure(Configurer configurer) {
-    // no-op
+
   }
 
   @Override
-  public EventReader createReader(List<SourceTable> tables, DeltaSourceContext context, EventEmitter eventEmitter) {
+  public EventReader createReader(List<SourceTable> tables, DeltaSourceContext context, EventEmitter emitter) {
     // TODO: use the tables passed in to read the required tables and columns
-    return new MySqlEventReader(conf, context, eventEmitter);
+    return new SqlServerEventReader(tables, config, context, emitter);
   }
 
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
-    Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
-                                                                        "targetDriver",
-                                                                        PluginProperties.builder().build());
-    if (jdbcDriverClass == null) {
-      throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
-    }
-    try {
-      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(
-        jdbcDriverClass, String.format("jdbc:mysql://%s:%d/%s", conf.getHost(), conf.getPort(), conf.getDatabase()));
-      return new MySqlTableRegistry(conf, cleanup);
-    } catch (Exception e) {
-      throw new RuntimeException("Unable to instantiate JDBC driver", e);
-    }
+    return null;
   }
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
+    // TODO: implement accesssment, this is to fix complile error
     return null;
   }
 }

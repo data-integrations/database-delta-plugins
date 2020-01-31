@@ -14,11 +14,11 @@
  * the License.
  */
 
-package io.cdap.delta.mysql;
+package io.cdap.delta.common;
 
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
-import io.debezium.connector.mysql.MySqlValueConverters;
+import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
 import org.apache.kafka.connect.data.Field;
@@ -45,7 +45,7 @@ public class Records {
    * @param converters
    * @return
    */
-  public static Schema getSchema(Table table, MySqlValueConverters converters) {
+  public static Schema getSchema(Table table, JdbcValueConverters converters) {
     List<Schema.Field> fields = new ArrayList<>(table.columns().size());
     for (Column column : table.columns()) {
       fields.add(Schema.Field.of(column.name(), convert(converters.schemaBuilder(column).build())));

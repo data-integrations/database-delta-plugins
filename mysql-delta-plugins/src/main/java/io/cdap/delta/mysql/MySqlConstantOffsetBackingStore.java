@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.common;
+package io.cdap.delta.mysql;
 
 import com.google.gson.Gson;
 import io.cdap.cdap.api.common.Bytes;
@@ -38,14 +38,12 @@ import java.util.Map;
  *
  * {"file":"mysql-bin.000003","pos":16838027,"row":1,"server_id":223344,"event":2,"ts_sec":1234567890}
  */
-public class ConstantOffsetBackingStore extends MemoryOffsetBackingStore {
+public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   private static final Gson GSON = new Gson();
   private static final String KEY = "{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}";
 
   @Override
   public void configure(WorkerConfig config) {
-    // TODO: remove hack once EmbeddedEngine is no longer used
-
     String offsetStr = config.getString("offset.storage.file.filename");
     if ("|".equals(offsetStr) || offsetStr.isEmpty()) {
       return;

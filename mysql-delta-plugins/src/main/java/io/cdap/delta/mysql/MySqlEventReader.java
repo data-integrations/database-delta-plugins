@@ -26,8 +26,8 @@ import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.Offset;
-import io.cdap.delta.common.ConstantOffsetBackingStore;
 import io.cdap.delta.common.DBSchemaHistory;
+import io.cdap.delta.common.Records;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
@@ -86,12 +86,11 @@ public class MySqlEventReader implements EventReader {
     String fileStr = Bytes.toString(offset.get().getOrDefault("file", Bytes.toBytes("")));
     byte[] posBytes = offset.get().get("pos");
     String pos = posBytes == null ? "" : Long.toString(Bytes.toLong(posBytes));
-    // TODO: don't use EmbeddedEngine, these things aren't actually configurable
     // have to pass config to the offset storage implementation through 'offset.storage.file.filename'
     // since embedded engine only passes a hardcoded set of config properties to the offset store.
     Configuration debeziumConf = Configuration.create()
       .with("connector.class", MySqlConnector.class.getName())
-      .with("offset.storage", ConstantOffsetBackingStore.class.getName())
+      .with("offset.storage", MySqlConstantOffsetBackingStore.class.getName())
       .with("offset.storage.file.filename", pos + "|" + fileStr)
       .with("offset.flush.interval.ms", 1000)
       /* begin connector properties */
