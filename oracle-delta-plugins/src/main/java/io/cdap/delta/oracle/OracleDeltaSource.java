@@ -32,7 +32,6 @@ import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.common.DriverCleanup;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.sql.Driver;
 import java.sql.SQLException;
 import java.util.List;
@@ -72,15 +71,6 @@ public class OracleDeltaSource implements DeltaSource {
       driverCleanup.close();
     } catch (IOException e) {
       throw new RuntimeException("Unable to de-register jdbc driver plugin: " + e.getMessage(), e);
-    }
-
-    try {
-      System.setProperty("java.library.path", conf.getLibPath());
-      Field fieldSysPath = ClassLoader.class.getDeclaredField("sys_paths");
-      fieldSysPath.setAccessible(true);
-      fieldSysPath.set(null, null);
-    } catch (Exception e) {
-      throw new RuntimeException("Unable to load jdbc native libraries.");
     }
   }
 
