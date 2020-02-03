@@ -74,7 +74,7 @@ public class OracleEventReader implements EventReader {
 
     Configuration debeziumConf = Configuration.create()
       .with("connector.class", OracleConnector.class.getName())
-      .with("offset.storage", ConstantOffsetBackingStore.class.getName())
+      .with("offset.storage", OracleConstantOffsetBackingStore.class.getName())
       .with("offset.storage.file.filename", scn)
       .with("offset.flush.interval.ms", 1000)
       /* begin connector properties */
