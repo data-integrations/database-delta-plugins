@@ -25,6 +25,7 @@
   <version>0.1.0-SNAPSHOT</version>
   <modules>
     <module>mysql-delta-plugins</module>
+    <module>oracle-delta-plugins</module>
     <module>delta-plugins-common</module>
   </modules>
   <name>Database Delta plugins</name>
