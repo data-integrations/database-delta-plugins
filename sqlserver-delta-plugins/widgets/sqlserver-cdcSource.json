@@ -1,0 +1,45 @@
+{
+  "metadata": {
+    "spec-version": "1.5"
+  },
+  "display-name": "SqlServer",
+  "configuration-groups": [
+    {
+      "label": "Database Location",
+      "properties": [
+        {
+          "name": "host",
+          "label": "Host",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "port",
+          "label": "Port",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "serverTimezone",
+          "label": "Server Timezone",
+          "widget-type": "textbox"
+        }
+      ]
+    },
+    {
+      "label": "User Account",
+      "properties": [
+        {
+          "name": "user",
+          "label": "User",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "password",
+          "label": "Password",
+          "widget-type": "password"
+        }
+      ]
+    }
+  ],
+  "outputs": []
+}
+

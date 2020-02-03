@@ -1,0 +1,109 @@
+/*
+ * Copyright © 2020 Cask Data, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
+package io.cdap.delta.sqlserver;
+
+import com.google.gson.Gson;
+import io.cdap.cdap.api.common.Bytes;
+import io.debezium.connector.sqlserver.SourceInfo;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.storage.MemoryOffsetBackingStore;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * The offset store class for sql server. Sql server expects the offset which contains:
+ * 1. change_lsn, 2. commmit_lsn, 3. snapshot, 4. snapshot_completed.
+ */
+public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStore {
+  private static final String SNAPSHOT_COMPLETED = "snapshot_completed";
+  private static final Gson GSON = new Gson();
+  private static final String KEY = "{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}";
+
+  @Override
+  public void configure(WorkerConfig config) {
+    // the custom config will be in original configs, config.getString() will throw ConfigException saying this is
+    // an unknown config
+    Map<String, String> originalConfig = config.originalsStrings();
+    String changeStr = originalConfig.get(SourceInfo.CHANGE_LSN_KEY);
+    String commitStr = originalConfig.get(SourceInfo.COMMIT_LSN_KEY);
+    String snapshot = originalConfig.get(SourceInfo.SNAPSHOT_KEY);
+    String snapshotCompleted = originalConfig.get(SNAPSHOT_COMPLETED);
+
+    Map<String, Object> offset = new HashMap<>();
+    if (!changeStr.isEmpty()) {
+      offset.put(SourceInfo.CHANGE_LSN_KEY, changeStr);
+    }
+    if (!commitStr.isEmpty()) {
+      offset.put(SourceInfo.COMMIT_LSN_KEY, commitStr);
+    }
+    if (!snapshot.isEmpty()) {
+      offset.put(SourceInfo.SNAPSHOT_KEY, Boolean.valueOf(snapshot));
+    }
+    if (!snapshotCompleted.isEmpty()) {
+      offset.put(SNAPSHOT_COMPLETED, Boolean.valueOf(snapshotCompleted));
+    }
+
+    // if this is missing and we add an empty map, for some reason, the connector will still consider there is some
+    // value about the offset, and thus skip reading some values
+    if (offset.isEmpty()) {
+      return;
+    }
+    byte[] offsetBytes = Bytes.toBytes(GSON.toJson(offset));
+
+    data.put(ByteBuffer.wrap(Bytes.toBytes(KEY)), ByteBuffer.wrap(offsetBytes));
+  }
+
+  static Map<String, String> deserializeOffsets(Map<String, byte[]> offsets) {
+    Map<String, String> offsetConfig = new HashMap<>();
+    String changeLsn = Bytes.toString(offsets.getOrDefault(SourceInfo.CHANGE_LSN_KEY, null));
+    String commitLsn = Bytes.toString(offsets.getOrDefault(SourceInfo.COMMIT_LSN_KEY, null));
+    String snapshot = Bytes.toString(offsets.getOrDefault(SourceInfo.SNAPSHOT_KEY, null));
+    String snapshotCompleted = Bytes.toString(offsets.getOrDefault(SNAPSHOT_COMPLETED, null));
+    // this is prevent NPE since the configuration does not allow putting null value,
+    // also WorkerConfig.get() will throw Exception if a configuration is not found, so have to put some value in it
+    offsetConfig.put(SourceInfo.CHANGE_LSN_KEY, changeLsn == null ? "" : changeLsn);
+    offsetConfig.put(SourceInfo.COMMIT_LSN_KEY, commitLsn == null ? "" : commitLsn);
+    offsetConfig.put(SourceInfo.SNAPSHOT_KEY, snapshot == null ? "" : snapshot);
+    offsetConfig.put(SNAPSHOT_COMPLETED, snapshotCompleted == null ? "" : snapshotCompleted);
+    return offsetConfig;
+  }
+
+  static Map<String, byte[]> serializeOffsets(SourceRecord sourceRecord) {
+    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
+    String changLsn = (String) sourceOffset.get(SourceInfo.CHANGE_LSN_KEY);
+    String commitLsn = (String) sourceOffset.get(SourceInfo.COMMIT_LSN_KEY);
+    Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
+    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SNAPSHOT_COMPLETED);
+    Map<String, byte[]> deltaOffset = new HashMap<>(4);
+    if (changLsn != null) {
+      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, Bytes.toBytes(changLsn));
+    }
+    if (commitLsn != null) {
+      deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, Bytes.toBytes(commitLsn));
+    }
+    if (snapshot != null) {
+      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, Bytes.toBytes(snapshot.toString()));
+    }
+    if (snapshotCompleted != null) {
+      deltaOffset.put(SNAPSHOT_COMPLETED, Bytes.toBytes(snapshotCompleted.toString()));
+    }
+    return deltaOffset;
+  }
+}
