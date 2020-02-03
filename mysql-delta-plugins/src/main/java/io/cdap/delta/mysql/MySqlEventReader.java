@@ -102,7 +102,7 @@ public class MySqlEventReader implements EventReader {
       .with("database.password", config.getPassword())
       .with("server.id", config.getConsumerID())
       .with("database.history", DBSchemaHistory.class.getName())
-      .with("database.whitelist", config.getDatabaseWhiteList())
+      .with("database.whitelist", config.getDatabase())
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
       .build();

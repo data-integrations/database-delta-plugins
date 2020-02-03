@@ -42,27 +42,24 @@ public class MySqlConfig extends PluginConfig {
   @Description("A unique numeric ID to identify this origin as an event consumer.")
   private int consumerID;
 
-  @Nullable
   @Description("Database to consume events for.")
-  private String databaseWhiteList;
-
-  @Nullable
-  @Description("List of tables to consumer changes for.")
-  private String tableWhiteList;
+  private String database;
 
   @Nullable
   @Description("Timezone of the MySQL server. This is used when converting dates into timestamps.")
   private String serverTimezone;
 
+  @Description("Name of the jdbc plugin to use.")
+  private String jdbcPluginName;
+
   public MySqlConfig(String host, int port, String user, String password, int consumerID,
-                     String databaseWhiteList, String tableWhiteList, @Nullable String serverTimezone) {
+                     String database, @Nullable String serverTimezone) {
     this.host = host;
     this.port = port;
     this.user = user;
     this.password = password;
     this.consumerID = consumerID;
-    this.databaseWhiteList = databaseWhiteList;
-    this.tableWhiteList = tableWhiteList;
+    this.database = database;
     this.serverTimezone = serverTimezone;
   }
 
@@ -86,15 +83,15 @@ public class MySqlConfig extends PluginConfig {
     return consumerID;
   }
 
-  public String getDatabaseWhiteList() {
-    return databaseWhiteList == null ? "" : databaseWhiteList;
-  }
-
-  public String getTableWhiteList() {
-    return tableWhiteList == null ? "" : tableWhiteList;
+  public String getDatabase() {
+    return database;
   }
 
   public String getServerTimezone() {
     return serverTimezone == null || serverTimezone.isEmpty() ? "UTC" : serverTimezone;
+  }
+
+  public String getJdbcPluginName() {
+    return jdbcPluginName;
   }
 }

@@ -19,12 +19,20 @@ package io.cdap.delta.mysql;
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.api.annotation.Plugin;
+import io.cdap.cdap.api.plugin.PluginProperties;
 import io.cdap.delta.api.Configurer;
 import io.cdap.delta.api.DeltaSource;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
+import io.cdap.delta.api.SourceTable;
+import io.cdap.delta.api.assessment.TableAssessor;
+import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
+import io.cdap.delta.common.DriverCleanup;
+
+import java.sql.Driver;
+import java.util.List;
 
 /**
  * Mysql origin.
@@ -46,12 +54,29 @@ public class MySqlDeltaSource implements DeltaSource {
   }
 
   @Override
-  public EventReader createReader(DeltaSourceContext context, EventEmitter eventEmitter) {
+  public EventReader createReader(List<SourceTable> tables, DeltaSourceContext context, EventEmitter eventEmitter) {
     return new MySqlEventReader(conf, context, eventEmitter);
   }
 
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
+    Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
+                                                                        "targetDriver",
+                                                                        PluginProperties.builder().build());
+    if (jdbcDriverClass == null) {
+      throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
+    }
+    try {
+      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(
+        jdbcDriverClass, String.format("jdbc:mysql://%s:%d/%s", conf.getHost(), conf.getPort(), conf.getDatabase()));
+      return new MySqlTableRegistry(conf, cleanup);
+    } catch (Exception e) {
+      throw new RuntimeException("Unable to instantiate JDBC driver", e);
+    }
+  }
+
+  @Override
+  public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
     return null;
   }
 }
