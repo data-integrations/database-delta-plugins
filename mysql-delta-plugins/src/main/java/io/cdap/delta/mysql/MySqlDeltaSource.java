@@ -34,8 +34,6 @@ import io.cdap.delta.common.DriverCleanup;
 import java.sql.Driver;
 import java.util.List;
 
-import java.util.List;
-
 /**
  * Mysql origin.
  */
