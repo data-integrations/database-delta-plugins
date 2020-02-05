@@ -26,14 +26,12 @@ import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.EventReaderDefinition;
-import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.common.DriverCleanup;
 
 import java.sql.Driver;
-import java.util.List;
 
 /**
  * Mysql origin.
@@ -55,8 +53,7 @@ public class MySqlDeltaSource implements DeltaSource {
   }
 
   @Override
-  public EventReader createReader(EventReaderDefinition definition, DeltaSourceContext context,
-                                  EventEmitter eventEmitter) {
+  public EventReader createReader(EventReaderDefinition tables, DeltaSourceContext context, EventEmitter eventEmitter) {
     // TODO: use the tables passed in to read the required tables and columns
     return new MySqlEventReader(conf, context, eventEmitter);
   }

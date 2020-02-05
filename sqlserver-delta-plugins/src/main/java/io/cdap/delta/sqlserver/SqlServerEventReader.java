@@ -60,8 +60,12 @@ public class SqlServerEventReader implements EventReader {
   @Override
   public void start(Offset offset) {
     // this is needed since sql server does not return the database information in the record
-    String databaseName = tables.isEmpty() ? null : tables.iterator().next().getDatabase();
-    List<String> tableList = tables.stream().map(SourceTable::getTable).collect(Collectors.toList());
+    String databaseName = config.getDatabase();
+    List<String> tableList = tables.stream().map(sourceTable -> {
+      String schema = sourceTable.getSchema();
+      String table = sourceTable.getTable();
+      return schema == null ? table : schema + "." + table;
+    }).collect(Collectors.toList());
 
     // offset config
     Configuration.Builder builder = Configuration.create()
