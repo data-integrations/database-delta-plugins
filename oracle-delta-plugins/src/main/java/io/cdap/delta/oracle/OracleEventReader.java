@@ -73,7 +73,7 @@ public class OracleEventReader implements EventReader {
       .with("offset.flush.interval.ms", 1000);
 
     // bind offset configs with debezium config
-    deserializeOffsets(offset.get()).forEach(builder::with);
+    convertOffsets(offset.get()).forEach(builder::with);
 
     Configuration debeziumConf = builder
       /* begin connector properties */
@@ -89,7 +89,6 @@ public class OracleEventReader implements EventReader {
       // below is a workaround fix for ORA-21560 issue, Jira to track: https://issues.cask.co/browse/PLUGIN-105
       .with("database.oracle.version", 11)
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
-      .with("table.whitelist", config.getTableWhiteList())
       .build();
 
     DBSchemaHistory.deltaRuntimeContext = context;
@@ -122,7 +121,8 @@ public class OracleEventReader implements EventReader {
     executorService.shutdown();
   }
 
-  private Map<String, String> deserializeOffsets(Map<String, byte[]> offsets) {
+  // This method is used for converting a CDAP offset into a debezium offset
+  private Map<String, String> convertOffsets(Map<String, byte[]> offsets) {
     Map<String, String> offsetConfigMap = new HashMap<>();
     String scn = Bytes.toString(offsets.get(SourceInfo.SCN_KEY));
     String lcrPosition = Bytes.toString(offsets.get(SourceInfo.LCR_POSITION_KEY));

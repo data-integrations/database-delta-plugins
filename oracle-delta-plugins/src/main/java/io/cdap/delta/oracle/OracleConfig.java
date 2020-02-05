@@ -58,15 +58,10 @@ public class OracleConfig extends PluginConfig {
     + "This is required if a JDBC plugin was specified.")
   private String connectionString;
 
-  @Nullable
-  @Description("A comma separated list of tables to consumer changes for.")
-  private String tableWhiteList;
-
   public OracleConfig(String host, int port, String user, String password,
                       String dbName, String pdbName, String outServerName,
                       String jdbcPluginName, String libPath,
-                      @Nullable String connectionString,
-                      @Nullable String tableWhiteList) {
+                      @Nullable String connectionString) {
     this.host = host;
     this.port = port;
     this.user = user;
@@ -77,7 +72,6 @@ public class OracleConfig extends PluginConfig {
     this.jdbcPluginName = jdbcPluginName;
     this.libPath = libPath;
     this.connectionString = connectionString;
-    this.tableWhiteList = tableWhiteList;
   }
 
   public String getHost() {
@@ -118,9 +112,5 @@ public class OracleConfig extends PluginConfig {
 
   public String getConnectionString() {
     return connectionString == null ? "jdbc:oracle:oci:@" + host + ":" + port + "/" + dbName : connectionString;
-  }
-
-  public String getTableWhiteList() {
-    return tableWhiteList == null ? "" : tableWhiteList;
   }
 }

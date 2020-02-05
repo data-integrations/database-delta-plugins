@@ -67,7 +67,7 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
     Boolean snapshotCompleted = (Boolean) sourceOffset.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
 
-    Map<String, byte[]> deltaOffset = serializeOffsets(sourceRecord);
+    Map<String, byte[]> deltaOffset = generateCdapOffsets(sourceRecord);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     StructuredRecord source = val.get("source");
     String recordName = val.getSchema().getRecordName();
@@ -131,15 +131,23 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     }
   }
 
-  private Map<String, byte[]> serializeOffsets(SourceRecord sourceRecord) {
+  // This method is used for generating a cdap offsets from debezium sourceRecord.
+  private Map<String, byte[]> generateCdapOffsets(SourceRecord sourceRecord) {
+    Map<String, byte[]> deltaOffset = new HashMap<>();
     Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
-    Struct source = (Struct) ((Struct) sourceRecord.value()).get("source");
-    Boolean snapshotCompleted = (Boolean) sourceOffset.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    Struct value = (Struct) sourceRecord.value();
+    if (value == null) { // safety check to avoid NPE
+      return deltaOffset;
+    }
+    Struct source = (Struct) value.get("source");
+    if (source == null) { // safety check to avoid NPE
+      return deltaOffset;
+    }
+
     Long scn = (Long) source.get(SourceInfo.SCN_KEY);
     String lcrPosition = (String) source.get(SourceInfo.LCR_POSITION_KEY);
-    Boolean snapshot = (Boolean) source.get(SourceInfo.SNAPSHOT_KEY);;
-
-    Map<String, byte[]> deltaOffset = new HashMap<>();
+    Boolean snapshot = (Boolean) source.get(SourceInfo.SNAPSHOT_KEY);
+    Boolean snapshotCompleted = (Boolean) sourceOffset.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
 
     if (scn != null) {
       deltaOffset.put(SourceInfo.SCN_KEY, Bytes.toBytes(scn.toString()));

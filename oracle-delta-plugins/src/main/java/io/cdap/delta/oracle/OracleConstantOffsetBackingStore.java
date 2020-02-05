@@ -41,6 +41,7 @@ import java.util.Map;
  */
 public class OracleConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   static final String SNAPSHOT_COMPLETED = "snapshot_completed";
+  private static final Gson gson = new Gson();
   // The key is hardcoded here
   private static final ByteBuffer KEY =
     StandardCharsets.UTF_8.encode("{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}");
@@ -70,7 +71,7 @@ public class OracleConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     if (offset.isEmpty()) {
       return;
     }
-    Gson gson = new Gson();
+
     data.put(KEY, StandardCharsets.UTF_8.encode(gson.toJson(offset)));
   }
 }
