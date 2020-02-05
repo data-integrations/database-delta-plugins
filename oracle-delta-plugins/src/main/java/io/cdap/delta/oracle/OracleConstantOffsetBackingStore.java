@@ -17,15 +17,13 @@
 package io.cdap.delta.oracle;
 
 import com.google.gson.Gson;
-import io.cdap.cdap.api.common.Bytes;
 import io.debezium.connector.oracle.SourceInfo;
 import io.debezium.util.Strings;
-import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.MemoryOffsetBackingStore;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,9 +41,9 @@ import java.util.Map;
  */
 public class OracleConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   static final String SNAPSHOT_COMPLETED = "snapshot_completed";
-  private static final Gson GSON = new Gson();
-  private static final String SOURCE = "source";
-  private static final String KEY = "{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}";
+  // The key is hardcoded here
+  private static final ByteBuffer KEY =
+    StandardCharsets.UTF_8.encode("{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}");
 
   @Override
   public void configure(WorkerConfig config) {
@@ -72,49 +70,7 @@ public class OracleConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     if (offset.isEmpty()) {
       return;
     }
-
-    byte[] offsetBytes = Bytes.toBytes(GSON.toJson(offset));
-    data.put(ByteBuffer.wrap(Bytes.toBytes(KEY)), ByteBuffer.wrap(offsetBytes));
-  }
-
-  static Map<String, String> deserializeOffsets(Map<String, byte[]> offsets) {
-    Map<String, String> offsetConfigMap = new HashMap<>();
-    String scn = Bytes.toString(offsets.get(SourceInfo.SCN_KEY));
-    String lcrPosition = Bytes.toString(offsets.get(SourceInfo.LCR_POSITION_KEY));
-    String snapshot = Bytes.toString(offsets.get(SourceInfo.SNAPSHOT_KEY));
-    String snapshotCompleted = Bytes.toString(offsets.get(SNAPSHOT_COMPLETED));
-
-    offsetConfigMap.put(SourceInfo.SCN_KEY, scn == null ? "" : scn);
-    offsetConfigMap.put(SourceInfo.LCR_POSITION_KEY, lcrPosition == null ? "" : lcrPosition);
-    offsetConfigMap.put(SourceInfo.SNAPSHOT_KEY, snapshot == null ? "" : snapshot);
-    offsetConfigMap.put(SNAPSHOT_COMPLETED, snapshotCompleted == null ? "" : snapshotCompleted);
-
-    return offsetConfigMap;
-  }
-
-  static Map<String, byte[]> serializeOffsets(SourceRecord sourceRecord) {
-    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
-    Struct source = (Struct) ((Struct) sourceRecord.value()).get(SOURCE);
-    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SNAPSHOT_COMPLETED);
-    Long scn = (Long) source.get(SourceInfo.SCN_KEY);
-    String lcrPosition = (String) source.get(SourceInfo.LCR_POSITION_KEY);
-    Boolean snapshot = (Boolean) source.get(SourceInfo.SNAPSHOT_KEY);;
-
-    Map<String, byte[]> deltaOffset = new HashMap<>();
-
-    if (scn != null) {
-      deltaOffset.put(SourceInfo.SCN_KEY, Bytes.toBytes(scn.toString()));
-    }
-    if (lcrPosition != null) {
-      deltaOffset.put(SourceInfo.LCR_POSITION_KEY, Bytes.toBytes(lcrPosition));
-    }
-    if (snapshot != null) {
-      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, Bytes.toBytes(snapshot.toString()));
-    }
-    if (snapshotCompleted != null) {
-      deltaOffset.put(SNAPSHOT_COMPLETED, Bytes.toBytes(snapshotCompleted.toString()));
-    }
-
-    return deltaOffset;
+    Gson gson = new Gson();
+    data.put(KEY, StandardCharsets.UTF_8.encode(gson.toJson(offset)));
   }
 }

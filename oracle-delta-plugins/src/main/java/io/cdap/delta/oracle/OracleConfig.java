@@ -49,7 +49,8 @@ public class OracleConfig extends PluginConfig {
   @Description("Name of the JDBC plugin to use.")
   private String jdbcPluginName;
 
-  @Description("Path to load JDBC native libraries.")
+  // TODO: implement the proper way load JDBC from remote path
+  @Description("Path to load JDBC native libraries from local.")
   private String libPath;
 
   @Nullable
@@ -58,7 +59,7 @@ public class OracleConfig extends PluginConfig {
   private String connectionString;
 
   @Nullable
-  @Description("List of tables to consumer changes for.")
+  @Description("A comma separated list of tables to consumer changes for.")
   private String tableWhiteList;
 
   public OracleConfig(String host, int port, String user, String password,

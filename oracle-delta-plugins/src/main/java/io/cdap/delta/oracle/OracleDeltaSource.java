@@ -52,7 +52,6 @@ public class OracleDeltaSource implements DeltaSource {
 
   @Override
   public void configure(Configurer configurer) {
-    DriverCleanup driverCleanup;
     Class<? extends Driver> driverClass = configurer.usePluginClass("jdbc",
                                                                     conf.getJdbcPluginName(),
                                                                     "jdbc",
@@ -61,14 +60,10 @@ public class OracleDeltaSource implements DeltaSource {
       throw new RuntimeException("Unable to find jdbc driver plugin : " + conf.getJdbcPluginName());
     }
 
-    try {
-      driverCleanup = DriverCleanup.ensureJDBCDriverIsAvailable(driverClass, conf.getConnectionString());
+    try (DriverCleanup driverCleanup =
+           DriverCleanup.ensureJDBCDriverIsAvailable(driverClass, conf.getConnectionString())) {
     } catch (IllegalAccessException | InstantiationException | SQLException e) {
       throw new RuntimeException("Unable to instantiate jdbc driver plugin: " + e.getMessage(), e);
-    }
-
-    try {
-      driverCleanup.close();
     } catch (IOException e) {
       throw new RuntimeException("Unable to de-register jdbc driver plugin: " + e.getMessage(), e);
     }
@@ -83,12 +78,12 @@ public class OracleDeltaSource implements DeltaSource {
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
     // TODO: implement table registry
-    return null;
+    throw new UnsupportedOperationException("createTableRegistry is not implemented yet");
   }
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
     // TODO: implement accesssment
-    return null;
+    throw new UnsupportedOperationException("createTableAssessor is not implemented yet");
   }
 }

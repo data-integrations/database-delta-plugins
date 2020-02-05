@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
 /**
  * Utilities for converting Records and Schemas.
  */
-public class Records {
+public final class Records {
 
   private Records() {
     // no-op

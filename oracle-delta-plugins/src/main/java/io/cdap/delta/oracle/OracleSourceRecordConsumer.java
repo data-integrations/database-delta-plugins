@@ -16,6 +16,7 @@
 
 package io.cdap.delta.oracle;
 
+import io.cdap.cdap.api.common.Bytes;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.DDLEvent;
@@ -31,15 +32,13 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-
-import static io.cdap.delta.oracle.OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED;
 
 /**
  * Source record consumer for Oracle DB.
@@ -52,7 +51,7 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
   // used to track the tables created or not
   private final Set<SourceTable> snapshotTrackingTables;
 
-  public OracleSourceRecordConsumer(@Nonnull String databaseName, @Nonnull EventEmitter emitter) {
+  public OracleSourceRecordConsumer(String databaseName, EventEmitter emitter) {
     this.databaseName = databaseName;
     this.emitter = emitter;
     this.snapshotTrackingTables = new HashSet<>();
@@ -66,9 +65,9 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
 
     Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
     Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
-    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SNAPSHOT_COMPLETED);
+    Boolean snapshotCompleted = (Boolean) sourceOffset.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
 
-    Map<String, byte[]> deltaOffset = OracleConstantOffsetBackingStore.serializeOffsets(sourceRecord);
+    Map<String, byte[]> deltaOffset = serializeOffsets(sourceRecord);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     StructuredRecord source = val.get("source");
     String recordName = val.getSchema().getRecordName();
@@ -82,15 +81,23 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
 
     DMLOperation op;
     String opStr = val.get("op");
-    if ("c".equals(opStr) || "r".equals(opStr)) {
-      op = DMLOperation.INSERT;
-    } else if ("u".equals(opStr)) {
-      op = DMLOperation.UPDATE;
-    } else if ("d".equals(opStr)) {
-      op = DMLOperation.DELETE;
-    } else {
-      LOG.warn("Skipping unknown operation type '{}'", opStr);
-      return;
+    if (opStr == null) { // it is a safety check to avoid potential NPE
+      opStr = "";
+    }
+    switch (opStr) {
+      case "c":
+      case "r":
+        op = DMLOperation.INSERT;
+        break;
+      case "u":
+        op = DMLOperation.UPDATE;
+        break;
+      case "d":
+        op = DMLOperation.DELETE;
+        break;
+      default:
+        LOG.warn("Skipping unknown operation type '{}'", opStr);
+        return;
     }
 
     // send the ddl event iff it was not in tracking before and it was marked as under snapshotting
@@ -118,10 +125,35 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     } else {
       emitter.emit(new DMLEvent(recordOffset, op, databaseName, tableName, after, transactionId, ingestTime));
 
-
       if (Boolean.TRUE.equals(snapshotCompleted)) {
         LOG.info("Snapshotting for table {} in database {} completed", tableName, databaseName);
       }
     }
+  }
+
+  private Map<String, byte[]> serializeOffsets(SourceRecord sourceRecord) {
+    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
+    Struct source = (Struct) ((Struct) sourceRecord.value()).get("source");
+    Boolean snapshotCompleted = (Boolean) sourceOffset.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    Long scn = (Long) source.get(SourceInfo.SCN_KEY);
+    String lcrPosition = (String) source.get(SourceInfo.LCR_POSITION_KEY);
+    Boolean snapshot = (Boolean) source.get(SourceInfo.SNAPSHOT_KEY);;
+
+    Map<String, byte[]> deltaOffset = new HashMap<>();
+
+    if (scn != null) {
+      deltaOffset.put(SourceInfo.SCN_KEY, Bytes.toBytes(scn.toString()));
+    }
+    if (lcrPosition != null) {
+      deltaOffset.put(SourceInfo.LCR_POSITION_KEY, Bytes.toBytes(lcrPosition));
+    }
+    if (snapshot != null) {
+      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, Bytes.toBytes(snapshot.toString()));
+    }
+    if (snapshotCompleted != null) {
+      deltaOffset.put(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED, Bytes.toBytes(snapshotCompleted.toString()));
+    }
+
+    return deltaOffset;
   }
 }

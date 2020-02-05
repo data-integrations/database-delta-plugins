@@ -38,6 +38,7 @@
       <groupId>com.oracle.xstream</groupId>
       <artifactId>xstream</artifactId>
       <version>12.0.1.0</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>io.cdap.delta</groupId>
@@ -72,11 +73,6 @@
             </goals>
           </execution>
         </executions>
-      </plugin>
-
-      <plugin>
-        <groupId>io.cdap</groupId>
-        <artifactId>cdap-maven-plugin</artifactId>
       </plugin>
     </plugins>
   </build>

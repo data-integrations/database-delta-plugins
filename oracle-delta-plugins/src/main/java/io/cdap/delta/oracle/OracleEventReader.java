@@ -16,6 +16,7 @@
 
 package io.cdap.delta.oracle;
 
+import io.cdap.cdap.api.common.Bytes;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -23,11 +24,14 @@ import io.cdap.delta.api.Offset;
 import io.cdap.delta.common.DBSchemaHistory;
 import io.debezium.config.Configuration;
 import io.debezium.connector.oracle.OracleConnector;
+import io.debezium.connector.oracle.SourceInfo;
 import io.debezium.embedded.EmbeddedEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -69,7 +73,7 @@ public class OracleEventReader implements EventReader {
       .with("offset.flush.interval.ms", 1000);
 
     // bind offset configs with debezium config
-    OracleConstantOffsetBackingStore.deserializeOffsets(offset.get()).forEach(builder::with);
+    deserializeOffsets(offset.get()).forEach(builder::with);
 
     Configuration debeziumConf = builder
       /* begin connector properties */
@@ -116,5 +120,21 @@ public class OracleEventReader implements EventReader {
       engine.await(1, TimeUnit.MINUTES);
     }
     executorService.shutdown();
+  }
+
+  private Map<String, String> deserializeOffsets(Map<String, byte[]> offsets) {
+    Map<String, String> offsetConfigMap = new HashMap<>();
+    String scn = Bytes.toString(offsets.get(SourceInfo.SCN_KEY));
+    String lcrPosition = Bytes.toString(offsets.get(SourceInfo.LCR_POSITION_KEY));
+    String snapshot = Bytes.toString(offsets.get(SourceInfo.SNAPSHOT_KEY));
+    String snapshotCompleted = Bytes.toString(offsets.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED));
+
+    offsetConfigMap.put(SourceInfo.SCN_KEY, scn == null ? "" : scn);
+    offsetConfigMap.put(SourceInfo.LCR_POSITION_KEY, lcrPosition == null ? "" : lcrPosition);
+    offsetConfigMap.put(SourceInfo.SNAPSHOT_KEY, snapshot == null ? "" : snapshot);
+    offsetConfigMap.put(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED,
+                        snapshotCompleted == null ? "" : snapshotCompleted);
+
+    return offsetConfigMap;
   }
 }
