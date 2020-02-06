@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -44,10 +45,10 @@ public class SqlServerEventReader implements EventReader {
   private final EventEmitter emitter;
   private final DeltaSourceContext context;
   private final ExecutorService executorService;
-  private final List<SourceTable> tables;
+  private final Set<SourceTable> tables;
   private EmbeddedEngine engine;
 
-  public SqlServerEventReader(List<SourceTable> tables, SqlServerConfig config,
+  public SqlServerEventReader(Set<SourceTable> tables, SqlServerConfig config,
                               DeltaSourceContext context, EventEmitter emitter) {
     this.config = config;
     this.emitter = emitter;
@@ -59,7 +60,7 @@ public class SqlServerEventReader implements EventReader {
   @Override
   public void start(Offset offset) {
     // this is needed since sql server does not return the database information in the record
-    String databaseName = tables.isEmpty() ? null : tables.get(0).getDatabase();
+    String databaseName = tables.isEmpty() ? null : tables.iterator().next().getDatabase();
     List<String> tableList = tables.stream().map(SourceTable::getTable).collect(Collectors.toList());
 
     // offset config
