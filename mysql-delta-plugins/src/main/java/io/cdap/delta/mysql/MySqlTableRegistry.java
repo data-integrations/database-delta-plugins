@@ -19,6 +19,7 @@ package io.cdap.delta.mysql;
 import com.mysql.cj.MysqlType;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
@@ -88,8 +89,10 @@ public class MySqlTableRegistry implements TableRegistry {
   }
 
   @Override
-  public Schema standardizeSchema(List<ColumnDetail> list) {
-    return Schema.recordOf("xyz", Schema.Field.of("x", Schema.of(Schema.Type.INT)));
+  public StandardizedTableDetail standardize(TableDetail tableDetail) {
+    Schema schema = Schema.recordOf("xyz", Schema.Field.of("x", Schema.of(Schema.Type.INT)));
+    return new StandardizedTableDetail(tableDetail.getDatabase(), tableDetail.getTable(),
+                                       tableDetail.getPrimaryKey(), schema);
   }
 
   @Override

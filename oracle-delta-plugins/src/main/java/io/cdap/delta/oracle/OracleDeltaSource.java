@@ -25,7 +25,7 @@ import io.cdap.delta.api.DeltaSource;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
-import io.cdap.delta.api.SourceTable;
+import io.cdap.delta.api.EventReaderDefinition;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
@@ -34,7 +34,6 @@ import io.cdap.delta.common.DriverCleanup;
 import java.io.IOException;
 import java.sql.Driver;
 import java.sql.SQLException;
-import java.util.List;
 
 /**
  * For oracle source plugin.
@@ -70,7 +69,8 @@ public class OracleDeltaSource implements DeltaSource {
   }
 
   @Override
-  public EventReader createReader(List<SourceTable> tables, DeltaSourceContext context, EventEmitter eventEmitter) {
+  public EventReader createReader(EventReaderDefinition definition, DeltaSourceContext context,
+                                  EventEmitter eventEmitter) {
     // TODO: incorporate with list of tables into event reader.
     return new OracleEventReader(conf, context, eventEmitter);
   }
