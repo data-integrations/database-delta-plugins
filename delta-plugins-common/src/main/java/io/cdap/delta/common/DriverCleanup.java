@@ -57,7 +57,7 @@ public class DriverCleanup implements Closeable {
       return new DriverCleanup(null);
     } catch (SQLException e) {
       Driver driver = classz.newInstance();
-      final JDBCDriverShim shim = new JDBCDriverShim(driver);
+      JDBCDriverShim shim = new JDBCDriverShim(driver);
       try {
         deregisterAllDrivers(classz);
       } catch (NoSuchFieldException | ClassNotFoundException e1) {

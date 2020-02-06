@@ -1,0 +1,218 @@
+/*
+ * Copyright © 2020 Cask Data, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
+package io.cdap.delta.sqlserver;
+
+import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.cdap.api.data.schema.UnsupportedTypeException;
+import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.StandardizedTableDetail;
+import io.cdap.delta.api.assessment.TableDetail;
+import io.cdap.delta.api.assessment.TableList;
+import io.cdap.delta.api.assessment.TableNotFoundException;
+import io.cdap.delta.api.assessment.TableRegistry;
+import io.cdap.delta.api.assessment.TableSummary;
+import io.cdap.delta.common.DriverCleanup;
+
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
+import java.sql.JDBCType;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * Sql Server table registry
+ */
+public class SqlServerTableRegistry implements TableRegistry {
+  private final String jdbcUrl;
+  private final SqlServerConfig config;
+  private final DriverCleanup driverCleanup;
+
+  public SqlServerTableRegistry(SqlServerConfig config, DriverCleanup driverCleanup) {
+    this.jdbcUrl = String.format("jdbc:sqlserver://%s:%d;databaseName=%s;user=%s;password=%s",
+                                 config.getHost(), config.getPort(), config.getDatabase(), config.getUser(),
+                                 config.getPassword());
+    this.config = config;
+    this.driverCleanup = driverCleanup;
+  }
+
+  @Override
+  public TableList listTables() throws IOException {
+    List<TableSummary> tables = new ArrayList<>();
+    try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+      try (Statement statement = connection.createStatement()) {
+        // we have to execute query here since the metadata will return sys tables back, and we cannot filter
+        // that, this query only works for SQL server 2005 or above
+        String query = String.format("SELECT name FROM %s.sys.tables where is_ms_shipped = 0", config.getDatabase());
+        ResultSet resultSet = statement.executeQuery(query);
+        Set<String> tableNames = new HashSet<>();
+        while (resultSet.next()) {
+          tableNames.add(resultSet.getString("name"));
+        }
+        DatabaseMetaData dbMeta = connection.getMetaData();
+        try (ResultSet tableResults = dbMeta.getTables(config.getDatabase(), null, null, new String[]{"TABLE"})) {
+          while (tableResults.next()) {
+            String tableName = tableResults.getString("TABLE_NAME");
+            if (!tableNames.contains(tableName)) {
+              continue;
+            }
+            Optional<TableDetail> tableDetail = getTableDetail(dbMeta, config.getDatabase(), tableName);
+            if (!tableDetail.isPresent()) {
+              // shouldn't happen
+              continue;
+            }
+            tables.add(new TableSummary(config.getDatabase(), tableName, tableDetail.get().getNumColumns()));
+          }
+        }
+        return new TableList(tables);
+      }
+    } catch (SQLException e) {
+      throw new IOException(e.getMessage(), e);
+    }
+  }
+
+  @Override
+  public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
+    try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+      DatabaseMetaData dbMeta = connection.getMetaData();
+      return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
+    } catch (SQLException e) {
+      throw new IOException(e.getMessage(), e);
+    }
+  }
+
+  @Override
+  public StandardizedTableDetail standardize(TableDetail tableDetail) {
+    List<Schema.Field> columnSchemas = new ArrayList<>();
+    for (ColumnDetail detail : tableDetail.getColumns()) {
+      columnSchemas.add(getSchemaField(detail));
+    }
+    Schema schema = Schema.recordOf("outputSchema", columnSchemas);
+    return new StandardizedTableDetail(tableDetail.getDatabase(), tableDetail.getTable(),
+                                       tableDetail.getPrimaryKey(), schema);
+  }
+
+  @Override
+  public void close() throws IOException {
+    driverCleanup.close();
+  }
+
+  private Optional<TableDetail> getTableDetail(DatabaseMetaData dbMeta, String db, String table) throws SQLException {
+    List<ColumnDetail> columns = new ArrayList<>();
+    // this schema name is needed to construct the full table name, e.g, dbo.test for debizium to fetch records from
+    // sql server. The table name is constructed using [schemaName].[tableName]. However, the dbMeta is not able
+    // to retrieve any result back if we pass in the full table name, the schema name has to be passed separately
+    // in the second parameter.
+    String schemaName = null;
+    try (ResultSet columnResults = dbMeta.getColumns(db, null, table, null)) {
+      while (columnResults.next()) {
+        schemaName = columnResults.getString("TABLE_SCHEM");
+        columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
+                                     JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
+                                     columnResults.getBoolean("NULLABLE")));
+      }
+    }
+    if (columns.isEmpty()) {
+      return Optional.empty();
+    }
+    List<String> primaryKey = new ArrayList<>();
+    try (ResultSet keyResults = dbMeta.getPrimaryKeys(db, null, table)) {
+      while (keyResults.next()) {
+        primaryKey.add(keyResults.getString("COLUMN_NAME"));
+      }
+    }
+
+    return Optional.of(new TableDetail(db, table, schemaName, primaryKey, columns));
+  }
+
+  // This is based on https://docs.microsoft.com/en-us/sql/connect/jdbc/using-basic-data-types?view=sql-server-ver15
+  private Schema.Field getSchemaField(ColumnDetail detail) {
+    Schema schema;
+    int sqlType = detail.getType().getVendorTypeNumber();
+    switch (sqlType) {
+      case Types.BIT:
+        schema = Schema.of(Schema.Type.BOOLEAN);
+        break;
+
+      case Types.TINYINT:
+      case Types.SMALLINT:
+      case Types.INTEGER:
+        schema = Schema.of(Schema.Type.INT);
+        break;
+
+      case Types.BIGINT:
+        schema = Schema.of(Schema.Type.LONG);
+        break;
+
+      case Types.REAL:
+      case Types.FLOAT:
+        schema = Schema.of(Schema.Type.FLOAT);
+        break;
+
+      case Types.NUMERIC:
+      case Types.DECIMAL:
+        // TODO: CDAP-16262 Add scale and precision to ColumnDetail to correctly determine the schema type
+        schema = Schema.of(Schema.Type.DOUBLE);
+        break;
+
+      case Types.DOUBLE:
+        schema = Schema.of(Schema.Type.DOUBLE);
+        break;
+
+      case Types.DATE:
+        schema = Schema.of(Schema.LogicalType.DATE);
+        break;
+      case Types.TIME:
+        schema = Schema.of(Schema.LogicalType.TIME_MICROS);
+        break;
+      case Types.TIMESTAMP:
+        schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        break;
+
+      case Types.BINARY:
+      case Types.VARBINARY:
+      case Types.LONGVARBINARY:
+        schema = Schema.of(Schema.Type.BYTES);
+        break;
+
+      case Types.VARCHAR:
+      case Types.CHAR:
+      case Types.LONGVARCHAR:
+      case Types.LONGNVARCHAR:
+      case Types.NCHAR:
+      case Types.NVARCHAR:
+        schema = Schema.of(Schema.Type.STRING);
+        break;
+
+      case Types.SQLXML:
+      // this contains microsoft.sql.Types.DATETIMEOFFSET, which is defined in the jdbc jar
+      default:
+        throw new RuntimeException(new UnsupportedTypeException("Unsupported SQL Type: " + sqlType));
+    }
+
+    Schema newSchema = detail.isNullable() ? Schema.nullableOf(schema) : schema;
+    return Schema.Field.of(detail.getName(), newSchema);
+  }
+}

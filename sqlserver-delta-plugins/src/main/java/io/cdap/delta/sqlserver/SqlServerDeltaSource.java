@@ -19,18 +19,19 @@ package io.cdap.delta.sqlserver;
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.api.annotation.Plugin;
+import io.cdap.cdap.api.plugin.PluginProperties;
 import io.cdap.delta.api.Configurer;
 import io.cdap.delta.api.DeltaSource;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.EventReaderDefinition;
-import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
+import io.cdap.delta.common.DriverCleanup;
 
-import java.util.List;
+import java.sql.Driver;
 
 /**
  * Sql Server delta source.
@@ -53,19 +54,35 @@ public class SqlServerDeltaSource implements DeltaSource {
   }
 
   @Override
-  public EventReader createReader(EventReaderDefinition definition, DeltaSourceContext context, EventEmitter emitter) {
+  public EventReader createReader(EventReaderDefinition tables, DeltaSourceContext context, EventEmitter emitter) {
     // TODO: use the tables passed in to read the required tables and columns
-    return new SqlServerEventReader(definition.getTables(), config, context, emitter);
+    return new SqlServerEventReader(tables.getTables(), config, context, emitter);
   }
 
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
-    return null;
+    Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", config.getJdbcPluginName(),
+                                                                        getJDBCPluginId(),
+                                                                        PluginProperties.builder().build());
+    if (jdbcDriverClass == null) {
+      throw new IllegalArgumentException("JDBC plugin " + config.getJdbcPluginName() + " not found.");
+    }
+    try {
+      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(
+        jdbcDriverClass, String.format("jdbc:sqlserver://%s:%d", config.getHost(), config.getPort()));
+      return new SqlServerTableRegistry(config, cleanup);
+    } catch (Exception e) {
+      throw new RuntimeException("Unable to instantiate JDBC driver", e);
+    }
   }
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
     // TODO: implement accesssment, this is to fix complile error
     return null;
+  }
+
+  private String getJDBCPluginId() {
+    return String.format("%s.%s.%s", "sqlserversource", "jbdc", config.getJdbcPluginName());
   }
 }

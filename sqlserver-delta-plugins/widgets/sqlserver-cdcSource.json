@@ -5,7 +5,7 @@
   "display-name": "SqlServer",
   "configuration-groups": [
     {
-      "label": "Database Location",
+      "label": "Connection Info",
       "properties": [
         {
           "name": "host",
@@ -15,6 +15,11 @@
         {
           "name": "port",
           "label": "Port",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "database",
+          "label": "database",
           "widget-type": "textbox"
         },
         {

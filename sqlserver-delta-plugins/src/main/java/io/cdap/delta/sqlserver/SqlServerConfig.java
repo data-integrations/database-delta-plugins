@@ -39,17 +39,29 @@ public class SqlServerConfig extends PluginConfig {
   @Description("Password to use to connect to the SqlServer.")
   private String password;
 
+  @Description("Database to consume events for.")
+  private String database;
+
   @Nullable
   @Description("Timezone of the SqlServer. This is used when converting dates into timestamps.")
   private String serverTimezone;
 
+  @Description("Name of the jdbc plugin to use.")
+  private String jdbcPluginName;
+
   public SqlServerConfig(String host, int port, String user, String password,
-                         String database, String tableWhiteList, @Nullable String serverTimezone) {
+                         String database, @Nullable String serverTimezone, String jdbcPluginName) {
     this.host = host;
     this.port = port;
     this.user = user;
     this.password = password;
+    this.database = database;
     this.serverTimezone = serverTimezone;
+    this.jdbcPluginName = jdbcPluginName;
+  }
+
+  public String getDatabase() {
+    return database;
   }
 
   public String getHost() {
@@ -66,6 +78,10 @@ public class SqlServerConfig extends PluginConfig {
 
   public String getPassword() {
     return password;
+  }
+
+  public String getJdbcPluginName() {
+    return jdbcPluginName;
   }
 
   public String getServerTimezone() {

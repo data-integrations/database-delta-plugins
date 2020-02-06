@@ -118,6 +118,6 @@ public class MySqlTableRegistry implements TableRegistry {
         primaryKey.add(keyResults.getString("COLUMN_NAME"));
       }
     }
-    return Optional.of(new TableDetail(db, table, primaryKey, columns));
+    return Optional.of(new TableDetail(db, table, null, primaryKey, columns));
   }
 }
