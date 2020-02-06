@@ -1,0 +1,70 @@
+{
+  "metadata": {
+    "spec-version": "1.5"
+  },
+  "display-name": "Oracle",
+  "configuration-groups": [
+    {
+      "label": "Database Connection",
+      "properties": [
+        {
+          "name": "host",
+          "label": "Host",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "port",
+          "label": "Port",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "dbName",
+          "label": "Database Name",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "pdbName",
+          "label": "Pluggable Database Name",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "outServerName",
+          "label": "XStream Out Server Name",
+          "widget-type": "textbox"
+        }
+      ]
+    },
+    {
+      "label": "User Account",
+      "properties": [
+        {
+          "name": "user",
+          "label": "User",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "password",
+          "label": "Password",
+          "widget-type": "password"
+        }
+      ]
+    },
+    {
+      "label" : "Library Configuration",
+      "properties" : [
+        {
+          "name": "jdbcPluginName",
+          "label": "Oracle JDBC Plugin Name",
+          "widget-type": "textbox"
+        },
+        {
+          "name": "libPath",
+          "label": "Oracle JDBC Native Library Path",
+          "widget-type": "textbox"
+        }
+      ]
+    }
+  ],
+  "outputs": []
+}
+
