@@ -26,6 +26,7 @@ import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
+import io.cdap.delta.common.BlacklistEventSet;
 import io.debezium.connector.oracle.SourceInfo;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -48,12 +49,15 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
 
   private final String databaseName;
   private final EventEmitter emitter;
+  private final Map<String, BlacklistEventSet> sourceTableBlacklistEventMap;
   // used to track the tables created or not
   private final Set<SourceTable> snapshotTrackingTables;
 
-  public OracleSourceRecordConsumer(String databaseName, EventEmitter emitter) {
+  public OracleSourceRecordConsumer(String databaseName, EventEmitter emitter,
+                                    Map<String, BlacklistEventSet> sourceTableBlacklistEventMap) {
     this.databaseName = databaseName;
     this.emitter = emitter;
+    this.sourceTableBlacklistEventMap = sourceTableBlacklistEventMap;
     this.snapshotTrackingTables = new HashSet<>();
   }
 
@@ -71,7 +75,16 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     StructuredRecord source = val.get("source");
     String recordName = val.getSchema().getRecordName();
-    String tableName  = recordName.split("\\.")[2];
+    if (recordName == null) {
+      return; // safety check to avoid NPE
+    }
+    String schemaName = recordName.split("\\.")[1].toUpperCase();
+    String tableName  = recordName.split("\\.")[2].toUpperCase();
+    String sourceTableId = schemaName + "." + tableName;
+    if (sourceTableBlacklistEventMap.get(sourceTableId) == null) {
+      // shouldn't happen
+      return;
+    }
     String transactionId = source.get("txId");
     StructuredRecord before = val.get("before");
     StructuredRecord after = val.get("after");
@@ -100,8 +113,12 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
         return;
     }
 
-    // send the ddl event iff it was not in tracking before and it was marked as under snapshotting
-    if (!snapshotTrackingTables.contains(table) && Boolean.TRUE.equals(snapshot)) {
+    // send the ddl event iff all the following conditions have been met:
+    // 1. CREATE_TABLE DDL op is not blacklisted
+    // 2. it was not in tracking before
+    // 3. it was marked as under snapshotting
+    if (!sourceTableBlacklistEventMap.get(sourceTableId).getDdlBlacklist().contains(DDLOperation.CREATE_TABLE) &&
+      !snapshotTrackingTables.contains(table) && Boolean.TRUE.equals(snapshot)) {
       LOG.info("Snapshotting for table {} in database {} started", tableName, databaseName);
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
@@ -118,6 +135,11 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
                      .setPrimaryKey(primaryKeyFields)
                      .build());
       snapshotTrackingTables.add(table);
+    }
+
+    if (sourceTableBlacklistEventMap.get(sourceTableId).getDmlBlacklist().contains(op)) {
+      // do nothing due to this DML op has been blacklisted
+      return;
     }
 
     if (op == DMLOperation.DELETE) {

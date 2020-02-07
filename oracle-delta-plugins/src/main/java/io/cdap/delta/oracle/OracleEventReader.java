@@ -17,10 +17,14 @@
 package io.cdap.delta.oracle;
 
 import io.cdap.cdap.api.common.Bytes;
+import io.cdap.delta.api.DDLOperation;
+import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
+import io.cdap.delta.api.EventReaderDefinition;
 import io.cdap.delta.api.Offset;
+import io.cdap.delta.common.BlacklistEventSet;
 import io.cdap.delta.common.DBSchemaHistory;
 import io.debezium.config.Configuration;
 import io.debezium.connector.oracle.OracleConnector;
@@ -31,10 +35,13 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Event reader for oracle.
@@ -45,12 +52,15 @@ public class OracleEventReader implements EventReader {
   private final DeltaSourceContext context;
   private final ExecutorService executorService;
   private final EventEmitter emitter;
+  private final EventReaderDefinition definition;
   private EmbeddedEngine engine;
 
-  public OracleEventReader(OracleConfig config, DeltaSourceContext context, EventEmitter emitter) {
+  public OracleEventReader(OracleConfig config, DeltaSourceContext context,
+                           EventEmitter emitter, EventReaderDefinition definition) {
     this.config = config;
     this.context = context;
     this.emitter = emitter;
+    this.definition = definition;
     this.executorService = Executors.newSingleThreadExecutor();
   }
 
@@ -66,6 +76,24 @@ public class OracleEventReader implements EventReader {
     } catch (Exception e) {
       throw new RuntimeException("Unable to load jdbc native libraries.");
     }
+
+    Map<String, BlacklistEventSet> sourceTableBlacklistEventMap = definition.getTables().stream().collect(
+      Collectors.toMap(
+        sourceTable -> {
+          String schema = sourceTable.getSchema();
+          String table = sourceTable.getTable();
+          return (schema == null ? table : schema + "." + table).toUpperCase();
+        },
+        sourceTable -> {
+          // union pipeline level blacklist and the table specific blacklist for DDL/DML
+          Set<DDLOperation> mergedDdlBlacklist = new HashSet<>();
+          mergedDdlBlacklist.addAll(sourceTable.getDdlBlacklist());
+          mergedDdlBlacklist.addAll(definition.getDdlBlacklist());
+          Set<DMLOperation> mergedDmlBlacklist = new HashSet<>();
+          mergedDmlBlacklist.addAll(sourceTable.getDmlBlacklist());
+          mergedDmlBlacklist.addAll(definition.getDmlBlacklist());
+          return new BlacklistEventSet(mergedDmlBlacklist, mergedDdlBlacklist);
+        }));
 
     Configuration.Builder builder = Configuration.create()
       .with("connector.class", OracleConnector.class.getName())
@@ -89,6 +117,7 @@ public class OracleEventReader implements EventReader {
       // below is a workaround fix for ORA-21560 issue, Jira to track: https://issues.cask.co/browse/PLUGIN-105
       .with("database.oracle.version", 11)
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
+      .with("table.whitelist", String.join(",", sourceTableBlacklistEventMap.keySet()))
       .build();
 
     DBSchemaHistory.deltaRuntimeContext = context;
@@ -99,7 +128,7 @@ public class OracleEventReader implements EventReader {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
-        .notifying(new OracleSourceRecordConsumer(config.getDbName(), emitter))
+        .notifying(new OracleSourceRecordConsumer(config.getDbName(), emitter, sourceTableBlacklistEventMap))
         .using((success, message, error) -> {
           if (!success) {
             LOG.error("Failed - {}", message, error);

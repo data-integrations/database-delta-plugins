@@ -57,8 +57,7 @@ public class OracleDeltaSource implements DeltaSource {
   @Override
   public EventReader createReader(EventReaderDefinition definition, DeltaSourceContext context,
                                   EventEmitter eventEmitter) {
-    // TODO: incorporate with list of tables into event reader.
-    return new OracleEventReader(conf, context, eventEmitter);
+    return new OracleEventReader(conf, context, eventEmitter, definition);
   }
 
   @Override
