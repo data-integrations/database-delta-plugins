@@ -17,8 +17,8 @@
 package io.cdap.delta.sqlserver;
 
 import io.cdap.cdap.api.data.schema.Schema;
-import io.cdap.cdap.api.data.schema.UnsupportedTypeException;
 import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
@@ -35,7 +35,6 @@ import java.sql.JDBCType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -97,6 +96,7 @@ public class SqlServerTableRegistry implements TableRegistry {
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
       DatabaseMetaData dbMeta = connection.getMetaData();
+      // TODO: CDAP-16277 do not lose difference in sql server types
       return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
     } catch (SQLException e) {
       throw new IOException(e.getMessage(), e);
@@ -107,7 +107,11 @@ public class SqlServerTableRegistry implements TableRegistry {
   public StandardizedTableDetail standardize(TableDetail tableDetail) {
     List<Schema.Field> columnSchemas = new ArrayList<>();
     for (ColumnDetail detail : tableDetail.getColumns()) {
-      columnSchemas.add(getSchemaField(detail));
+      SqlServerTableAssessor.ColumnEvaluation evaluation = SqlServerTableAssessor.evaluateColumn(detail);
+      if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
+        throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
+      }
+      columnSchemas.add(evaluation.getField());
     }
     Schema schema = Schema.recordOf("outputSchema", columnSchemas);
     return new StandardizedTableDetail(tableDetail.getDatabase(), tableDetail.getTable(),
@@ -145,74 +149,5 @@ public class SqlServerTableRegistry implements TableRegistry {
     }
 
     return Optional.of(new TableDetail(db, table, schemaName, primaryKey, columns));
-  }
-
-  // This is based on https://docs.microsoft.com/en-us/sql/connect/jdbc/using-basic-data-types?view=sql-server-ver15
-  private Schema.Field getSchemaField(ColumnDetail detail) {
-    Schema schema;
-    int sqlType = detail.getType().getVendorTypeNumber();
-    switch (sqlType) {
-      case Types.BIT:
-        schema = Schema.of(Schema.Type.BOOLEAN);
-        break;
-
-      case Types.TINYINT:
-      case Types.SMALLINT:
-      case Types.INTEGER:
-        schema = Schema.of(Schema.Type.INT);
-        break;
-
-      case Types.BIGINT:
-        schema = Schema.of(Schema.Type.LONG);
-        break;
-
-      case Types.REAL:
-      case Types.FLOAT:
-        schema = Schema.of(Schema.Type.FLOAT);
-        break;
-
-      case Types.NUMERIC:
-      case Types.DECIMAL:
-        // TODO: CDAP-16262 Add scale and precision to ColumnDetail to correctly determine the schema type
-        schema = Schema.of(Schema.Type.DOUBLE);
-        break;
-
-      case Types.DOUBLE:
-        schema = Schema.of(Schema.Type.DOUBLE);
-        break;
-
-      case Types.DATE:
-        schema = Schema.of(Schema.LogicalType.DATE);
-        break;
-      case Types.TIME:
-        schema = Schema.of(Schema.LogicalType.TIME_MICROS);
-        break;
-      case Types.TIMESTAMP:
-        schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
-        break;
-
-      case Types.BINARY:
-      case Types.VARBINARY:
-      case Types.LONGVARBINARY:
-        schema = Schema.of(Schema.Type.BYTES);
-        break;
-
-      case Types.VARCHAR:
-      case Types.CHAR:
-      case Types.LONGVARCHAR:
-      case Types.LONGNVARCHAR:
-      case Types.NCHAR:
-      case Types.NVARCHAR:
-        schema = Schema.of(Schema.Type.STRING);
-        break;
-
-      case Types.SQLXML:
-      // this contains microsoft.sql.Types.DATETIMEOFFSET, which is defined in the jdbc jar
-      default:
-        throw new RuntimeException(new UnsupportedTypeException("Unsupported SQL Type: " + sqlType));
-    }
-
-    Schema newSchema = detail.isNullable() ? Schema.nullableOf(schema) : schema;
-    return Schema.Field.of(detail.getName(), newSchema);
   }
 }

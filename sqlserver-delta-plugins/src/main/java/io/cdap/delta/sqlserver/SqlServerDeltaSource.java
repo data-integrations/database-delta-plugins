@@ -55,7 +55,6 @@ public class SqlServerDeltaSource implements DeltaSource {
 
   @Override
   public EventReader createReader(EventReaderDefinition tables, DeltaSourceContext context, EventEmitter emitter) {
-    // TODO: use the tables passed in to read the required tables and columns
     return new SqlServerEventReader(tables.getTables(), config, context, emitter);
   }
 
@@ -78,8 +77,7 @@ public class SqlServerDeltaSource implements DeltaSource {
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
-    // TODO: implement accesssment, this is to fix complile error
-    return null;
+    return new SqlServerTableAssessor();
   }
 
   private String getJDBCPluginId() {
