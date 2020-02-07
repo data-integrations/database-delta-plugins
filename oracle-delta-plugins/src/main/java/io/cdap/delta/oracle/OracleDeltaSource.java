@@ -51,21 +51,7 @@ public class OracleDeltaSource implements DeltaSource {
 
   @Override
   public void configure(Configurer configurer) {
-    Class<? extends Driver> driverClass = configurer.usePluginClass("jdbc",
-                                                                    conf.getJdbcPluginName(),
-                                                                    "jdbc",
-                                                                    PluginProperties.builder().build());
-    if (driverClass == null) {
-      throw new RuntimeException("Unable to find jdbc driver plugin : " + conf.getJdbcPluginName());
-    }
-
-    try (DriverCleanup driverCleanup =
-           DriverCleanup.ensureJDBCDriverIsAvailable(driverClass, conf.getConnectionString())) {
-    } catch (IllegalAccessException | InstantiationException | SQLException e) {
-      throw new RuntimeException("Unable to instantiate jdbc driver plugin: " + e.getMessage(), e);
-    } catch (IOException e) {
-      throw new RuntimeException("Unable to de-register jdbc driver plugin: " + e.getMessage(), e);
-    }
+    // no-op
   }
 
   @Override
@@ -77,8 +63,22 @@ public class OracleDeltaSource implements DeltaSource {
 
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
-    // TODO: implement table registry
-    throw new UnsupportedOperationException("createTableRegistry is not implemented yet");
+    Class<? extends Driver> driverClass = configurer.usePluginClass("jdbc",
+                                                                    conf.getJdbcPluginName(),
+                                                                    "jdbc",
+                                                                    PluginProperties.builder().build());
+    if (driverClass == null) {
+      throw new RuntimeException("Unable to find jdbc driver plugin : " + conf.getJdbcPluginName());
+    }
+
+    try (DriverCleanup driverCleanup =
+           DriverCleanup.ensureJDBCDriverIsAvailable(driverClass, conf.getConnectionString())) {
+      return new OracleTableRegistry(conf, driverCleanup);
+    } catch (IllegalAccessException | InstantiationException | SQLException e) {
+      throw new RuntimeException("Unable to instantiate jdbc driver plugin: " + e.getMessage(), e);
+    } catch (IOException e) {
+      throw new RuntimeException("Unable to de-register jdbc driver plugin: " + e.getMessage(), e);
+    }
   }
 
   @Override
