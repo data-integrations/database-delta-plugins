@@ -18,12 +18,14 @@ package io.cdap.delta.oracle;
 
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
 import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.api.assessment.TableSummary;
+import io.cdap.delta.common.ColumnEvaluation;
 import io.cdap.delta.common.DriverCleanup;
 import io.debezium.connector.oracle.OracleConnection;
 import io.debezium.connector.oracle.OracleConnectorConfig;
@@ -102,7 +104,11 @@ public class OracleTableRegistry implements TableRegistry {
   public StandardizedTableDetail standardize(TableDetail tableDetail) {
     List<Schema.Field> columnSchemas = new ArrayList<>();
     for (ColumnDetail detail : tableDetail.getColumns()) {
-      columnSchemas.add(Records.getSchemaField(detail));
+      ColumnEvaluation evaluation = OracleTableAssessor.evaluateColumn(detail);
+      if ((ColumnSupport.NO).equals(evaluation.getAssessment().getSupport())) {
+        throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
+      }
+      columnSchemas.add(evaluation.getField());
     }
     Schema schema = Schema.recordOf("outputSchema", columnSchemas);
     return new StandardizedTableDetail(tableDetail.getDatabase(), tableDetail.getTable(),

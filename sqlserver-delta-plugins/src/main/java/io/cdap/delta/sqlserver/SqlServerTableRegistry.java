@@ -25,6 +25,7 @@ import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
 import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.api.assessment.TableSummary;
+import io.cdap.delta.common.ColumnEvaluation;
 import io.cdap.delta.common.DriverCleanup;
 
 import java.io.IOException;
@@ -107,7 +108,7 @@ public class SqlServerTableRegistry implements TableRegistry {
   public StandardizedTableDetail standardize(TableDetail tableDetail) {
     List<Schema.Field> columnSchemas = new ArrayList<>();
     for (ColumnDetail detail : tableDetail.getColumns()) {
-      SqlServerTableAssessor.ColumnEvaluation evaluation = SqlServerTableAssessor.evaluateColumn(detail);
+      ColumnEvaluation evaluation = SqlServerTableAssessor.evaluateColumn(detail);
       if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
         throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
       }

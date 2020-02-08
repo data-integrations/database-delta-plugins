@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.sqlserver;
+package io.cdap.delta.oracle;
 
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnAssessment;
@@ -33,9 +33,9 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Sql server table assessor
+ * Table assessor for oracle.
  */
-public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
+public class OracleTableAssessor implements TableAssessor<TableDetail> {
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -46,100 +46,100 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
 
     List<Problem> problems = new ArrayList<>();
     if (tableDetail.getPrimaryKey().isEmpty()) {
-      problems.add(new Problem("Missing Primary Key", "Tables must have a primary key in order to be replicated.",
-                               "Please alter the table to use a primary key, or select a different table", ""));
+      problems.add(new Problem("Missing Primary Key",
+                               "Table must have a primary key in order to be replicated.",
+                               "Please alter the table to use a primary key, or select a different table",
+                               "Not able to do perform CDC for this table"));
     }
     return new TableAssessment(columnAssessments, problems);
   }
 
-  // This is based on https://docs.microsoft.com/en-us/sql/connect/jdbc/using-basic-data-types?view=sql-server-ver15
-  static ColumnEvaluation evaluateColumn(ColumnDetail detail) throws IllegalArgumentException {
+  // This mapping if followed by doc: https://docs.oracle.com/database/121/JJDBC/datacc.htm#JJDBC28367
+  static ColumnEvaluation evaluateColumn(ColumnDetail detail) {
     Schema schema;
     int sqlType = detail.getType().getVendorTypeNumber();
     ColumnSupport support = ColumnSupport.YES;
     ColumnSuggestion suggestion = null;
+
     switch (sqlType) {
+      case Types.CHAR:
+      case Types.VARCHAR:
+      case Types.LONGVARCHAR:
+      case Types.NCHAR:
+        schema = Schema.of(Schema.Type.STRING);
+        break;
+      case Types.NUMERIC:
+        // NUMERIC contains precision and scale, it will depend on that number to do the conversion, for unblocking
+        // current test table which defines ID as NUMBER(4), will hardcode it to map to INT.
+        // Loop back once this task CDAP-16262 is done.
+        schema = Schema.of(Schema.Type.INT);
+        break;
+      case Types.DECIMAL:
+        schema = Schema.of(Schema.LogicalType.DECIMAL);
+        break;
+      case Types.FLOAT:
+      case Types.DOUBLE:
+        schema = Schema.of(Schema.Type.DOUBLE);
+        break;
       case Types.BIT:
         schema = Schema.of(Schema.Type.BOOLEAN);
         break;
-
       case Types.TINYINT:
       case Types.SMALLINT:
       case Types.INTEGER:
         schema = Schema.of(Schema.Type.INT);
         break;
-
       case Types.BIGINT:
         schema = Schema.of(Schema.Type.LONG);
         break;
-
       case Types.REAL:
-      case Types.FLOAT:
         schema = Schema.of(Schema.Type.FLOAT);
         break;
-
-      case Types.NUMERIC:
-      case Types.DECIMAL:
-        // TODO: CDAP-16262 Add scale and precision to ColumnDetail to correctly determine the schema type
-        schema = Schema.of(Schema.Type.DOUBLE);
-        break;
-
-      case Types.DOUBLE:
-        schema = Schema.of(Schema.Type.DOUBLE);
-        break;
-
-      case Types.DATE:
-        schema = Schema.of(Schema.LogicalType.DATE);
-        break;
-      case Types.TIME:
-        support = ColumnSupport.PARTIAL;
-        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
-                                          Collections.emptyList());
-        schema = Schema.of(Schema.LogicalType.TIME_MICROS);
-        break;
-      case Types.TIMESTAMP:
-        support = ColumnSupport.PARTIAL;
-        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds " +
-                                            "if the sql server type is Datatime2",
-                                          Collections.emptyList());
-        schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
-        break;
-
       case Types.BINARY:
       case Types.VARBINARY:
       case Types.LONGVARBINARY:
         schema = Schema.of(Schema.Type.BYTES);
         break;
-
-      case Types.VARCHAR:
-      case Types.CHAR:
-      case Types.LONGVARCHAR:
-      case Types.LONGNVARCHAR:
-      case Types.NCHAR:
-      case Types.NVARCHAR:
-        schema = Schema.of(Schema.Type.STRING);
+      case Types.DATE:
+        schema = Schema.of(Schema.LogicalType.DATE);
         break;
-
-      case Types.SQLXML:
-        // this contains microsoft.sql.Types.DATETIMEOFFSET, which is defined in the jdbc jar
+      case Types.TIME:
+        schema = Schema.of(Schema.LogicalType.TIME_MILLIS);
+        break;
+      case Types.TIMESTAMP:
+        support = ColumnSupport.PARTIAL;
+        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
+                                          Collections.emptyList());
+        schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        break;
+      case Types.ARRAY:
+        schema = Schema.of(Schema.Type.ARRAY);
+        break;
       default:
         support = ColumnSupport.NO;
-        suggestion = new ColumnSuggestion("Unsupported SQL Type: " + detail.getType(),
+        suggestion = new ColumnSuggestion("Unsupported SQL Data Type: " + detail.getType(),
                                           Collections.emptyList());
         schema = null;
     }
 
-    Schema.Field field = schema == null ? null :
-                           Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
+    Schema.Field field = null;
     String type = "N/A";
+
+    if (schema != null) {
+      field = Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
+    }
+
     if (field != null) {
       Schema.LogicalType logicalType = field.getSchema().getLogicalType();
       type = logicalType == null ? field.getSchema().getType().name() : logicalType.name();
     }
+
     ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), type)
-                                    .setSupport(support)
-                                    .setSuggestion(suggestion)
-                                    .build();
+      .setSupport(support)
+      .setSuggestion(suggestion)
+      .build();
+
     return new ColumnEvaluation(field, assessment);
   }
 }
+
