@@ -106,7 +106,8 @@ public class OracleTableRegistry implements TableRegistry {
     for (ColumnDetail detail : tableDetail.getColumns()) {
       ColumnEvaluation evaluation = OracleTableAssessor.evaluateColumn(detail);
       if ((ColumnSupport.NO).equals(evaluation.getAssessment().getSupport())) {
-        throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
+        throw new IllegalArgumentException(String.format("Column %s is of unsupported type %s",
+                                                         detail.getName(), detail.getType().getName()));
       }
       columnSchemas.add(evaluation.getField());
     }

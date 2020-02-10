@@ -49,7 +49,7 @@ public class OracleTableAssessor implements TableAssessor<TableDetail> {
       problems.add(new Problem("Missing Primary Key",
                                "Table must have a primary key in order to be replicated.",
                                "Please alter the table to use a primary key, or select a different table",
-                               "Not able to do perform CDC for this table"));
+                               "Not able to replicate this table"));
     }
     return new TableAssessment(columnAssessments, problems);
   }
@@ -117,7 +117,7 @@ public class OracleTableAssessor implements TableAssessor<TableDetail> {
         break;
       default:
         support = ColumnSupport.NO;
-        suggestion = new ColumnSuggestion("Unsupported SQL Data Type: " + detail.getType(),
+        suggestion = new ColumnSuggestion("Unsupported SQL Data Type: " + detail.getType().getName(),
                                           Collections.emptyList());
         schema = null;
     }
@@ -130,8 +130,7 @@ public class OracleTableAssessor implements TableAssessor<TableDetail> {
     }
 
     if (field != null) {
-      Schema.LogicalType logicalType = field.getSchema().getLogicalType();
-      type = logicalType == null ? field.getSchema().getType().name() : logicalType.name();
+      type = detail.getType().getName();
     }
 
     ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), type)
