@@ -75,10 +75,10 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     StructuredRecord source = val.get("source");
     String recordName = val.getSchema().getRecordName();
+    // the record name will always be like this: [db.server.name].[schema].[table].Envelope
     if (recordName == null) {
       return; // safety check to avoid NPE
     }
-    // the splits will be returned like [db.server.name].[schema].[table].Envelope
     String[] splits = recordName.split("\\.");
     String schemaName = splits[1];
     String tableName  = splits[2];
