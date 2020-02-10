@@ -131,12 +131,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
 
     Schema.Field field = schema == null ? null :
                            Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
-    String type = "N/A";
-    if (field != null) {
-      Schema.LogicalType logicalType = field.getSchema().getLogicalType();
-      type = logicalType == null ? field.getSchema().getType().name() : logicalType.name();
-    }
-    ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), type)
+    ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), detail.getType().getName())
                                     .setSupport(support)
                                     .setSuggestion(suggestion)
                                     .build();
