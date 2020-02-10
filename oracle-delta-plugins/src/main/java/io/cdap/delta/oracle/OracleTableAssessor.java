@@ -123,14 +123,10 @@ public class OracleTableAssessor implements TableAssessor<TableDetail> {
     }
 
     Schema.Field field = null;
-    String type = "N/A";
+    String type = detail.getType().getName();
 
     if (schema != null) {
       field = Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
-    }
-
-    if (field != null) {
-      type = detail.getType().getName();
     }
 
     ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), type)
