@@ -78,10 +78,16 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     if (recordName == null) {
       return; // safety check to avoid NPE
     }
-    String schemaName = recordName.split("\\.")[1].toUpperCase();
-    String tableName  = recordName.split("\\.")[2].toUpperCase();
+    // the splits will be returned like [db.server.name].[schema].[table].Envelope
+    String[] splits = recordName.split("\\.");
+    String schemaName = splits[1];
+    String tableName  = splits[2];
     String sourceTableId = schemaName + "." + tableName;
-    if (sourceTableBlacklistEventMap.get(sourceTableId) == null) {
+    // If the map is empty, we should read all DDL/DML events and columns of all tables, basically, we should not do
+    // any blacklist for tables.
+    boolean readAllTables = sourceTableBlacklistEventMap.isEmpty();
+    BlacklistEventSet blacklistEventSet = sourceTableBlacklistEventMap.get(sourceTableId);
+    if (!readAllTables && blacklistEventSet == null) {
       // shouldn't happen
       return;
     }
@@ -114,10 +120,10 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     }
 
     // send the ddl event iff all the following conditions have been met:
-    // 1. CREATE_TABLE DDL op is not blacklisted
+    // 1. it was set to read all tables or CREATE_TABLE DDL op is not blacklisted for this table
     // 2. it was not in tracking before
     // 3. it was marked as under snapshotting
-    if (!sourceTableBlacklistEventMap.get(sourceTableId).getDdlBlacklist().contains(DDLOperation.CREATE_TABLE) &&
+    if ((readAllTables || !blacklistEventSet.getDdlBlacklist().contains(DDLOperation.CREATE_TABLE)) &&
       !snapshotTrackingTables.contains(table) && Boolean.TRUE.equals(snapshot)) {
       LOG.info("Snapshotting for table {} in database {} started", tableName, databaseName);
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
@@ -137,8 +143,8 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
       snapshotTrackingTables.add(table);
     }
 
-    if (sourceTableBlacklistEventMap.get(sourceTableId).getDmlBlacklist().contains(op)) {
-      // do nothing due to this DML op has been blacklisted
+    if (!readAllTables && blacklistEventSet.getDmlBlacklist().contains(op)) {
+      // do nothing due to it was not set to read all tables and this DML op has been blacklisted for this table
       return;
     }
 

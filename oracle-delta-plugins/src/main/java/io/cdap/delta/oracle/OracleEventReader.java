@@ -17,8 +17,6 @@
 package io.cdap.delta.oracle;
 
 import io.cdap.cdap.api.common.Bytes;
-import io.cdap.delta.api.DDLOperation;
-import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -35,9 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -82,18 +78,9 @@ public class OracleEventReader implements EventReader {
         sourceTable -> {
           String schema = sourceTable.getSchema();
           String table = sourceTable.getTable();
-          return (schema == null ? table : schema + "." + table).toUpperCase();
+          return schema == null ? table : schema + "." + table;
         },
-        sourceTable -> {
-          // union pipeline level blacklist and the table specific blacklist for DDL/DML
-          Set<DDLOperation> mergedDdlBlacklist = new HashSet<>();
-          mergedDdlBlacklist.addAll(sourceTable.getDdlBlacklist());
-          mergedDdlBlacklist.addAll(definition.getDdlBlacklist());
-          Set<DMLOperation> mergedDmlBlacklist = new HashSet<>();
-          mergedDmlBlacklist.addAll(sourceTable.getDmlBlacklist());
-          mergedDmlBlacklist.addAll(definition.getDmlBlacklist());
-          return new BlacklistEventSet(mergedDmlBlacklist, mergedDdlBlacklist);
-        }));
+        sourceTable -> new BlacklistEventSet(sourceTable.getDmlBlacklist(), sourceTable.getDdlBlacklist())));
 
     Configuration.Builder builder = Configuration.create()
       .with("connector.class", OracleConnector.class.getName())
