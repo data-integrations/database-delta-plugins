@@ -75,7 +75,8 @@ public class OracleTableRegistry implements TableRegistry {
             // shouldn't happen
             continue;
           }
-          tables.add(new TableSummary(jdbcConfig.getDatabase(), tableId.table(), tableDetail.get().getNumColumns()));
+          tables.add(new TableSummary(jdbcConfig.getDatabase(), tableId.table(), tableDetail.get().getNumColumns(),
+                                      tableDetail.get().getSchema()));
         }
       }
 
