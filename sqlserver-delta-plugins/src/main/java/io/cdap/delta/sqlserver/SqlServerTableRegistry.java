@@ -82,7 +82,8 @@ public class SqlServerTableRegistry implements TableRegistry {
               // shouldn't happen
               continue;
             }
-            tables.add(new TableSummary(config.getDatabase(), tableName, tableDetail.get().getNumColumns()));
+            tables.add(new TableSummary(config.getDatabase(), tableName, tableDetail.get().getNumColumns(),
+                                        tableDetail.get().getSchema()));
           }
         }
         return new TableList(tables);
