@@ -83,7 +83,6 @@ public class OracleDeltaSource implements DeltaSource {
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
-    // TODO: implement accesssment
-    throw new UnsupportedOperationException("createTableAssessor is not implemented yet");
+    return new OracleTableAssessor();
   }
 }
