@@ -26,7 +26,6 @@ import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
-import io.cdap.delta.common.BlacklistEventSet;
 import io.debezium.connector.oracle.SourceInfo;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -49,15 +48,15 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
 
   private final String databaseName;
   private final EventEmitter emitter;
-  private final Map<String, BlacklistEventSet> sourceTableBlacklistEventMap;
+  private final Map<String, SourceTable> sourceTableMap;
   // used to track the tables created or not
   private final Set<SourceTable> snapshotTrackingTables;
 
   public OracleSourceRecordConsumer(String databaseName, EventEmitter emitter,
-                                    Map<String, BlacklistEventSet> sourceTableBlacklistEventMap) {
+                                    Map<String, SourceTable> sourceTableMap) {
     this.databaseName = databaseName;
     this.emitter = emitter;
-    this.sourceTableBlacklistEventMap = sourceTableBlacklistEventMap;
+    this.sourceTableMap = sourceTableMap;
     this.snapshotTrackingTables = new HashSet<>();
   }
 
@@ -85,18 +84,20 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     String sourceTableId = schemaName + "." + tableName;
     // If the map is empty, we should read all DDL/DML events and columns of all tables, basically, we should not do
     // any blacklist for tables.
-    boolean readAllTables = sourceTableBlacklistEventMap.isEmpty();
-    BlacklistEventSet blacklistEventSet = sourceTableBlacklistEventMap.get(sourceTableId);
-    if (!readAllTables && blacklistEventSet == null) {
+    boolean readAllTables = sourceTableMap.isEmpty();
+    SourceTable sourceTable = sourceTableMap.get(sourceTableId);
+    if (!readAllTables && sourceTable == null) {
       // shouldn't happen
       return;
     }
     String transactionId = source.get("txId");
-    StructuredRecord before = val.get("before");
-    StructuredRecord after = val.get("after");
+    StructuredRecord before = readAllTables ? val.get("before") :
+      Records.keepSelectedColumns(val.get("before"), sourceTable.getColumns());
+    StructuredRecord after = readAllTables ? val.get("after") :
+      Records.keepSelectedColumns(val.get("after"), sourceTable.getColumns());
     Long ingestTime = val.get("ts_ms");
     Offset recordOffset = new Offset(deltaOffset);
-    SourceTable table = new SourceTable(databaseName, tableName);
+    SourceTable trackingTable = new SourceTable(databaseName, tableName);
 
     DMLOperation op;
     String opStr = val.get("op");
@@ -123,8 +124,8 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     // 1. it was set to read all tables or CREATE_TABLE DDL op is not blacklisted for this table
     // 2. it was not in tracking before
     // 3. it was marked as under snapshotting
-    if ((readAllTables || !blacklistEventSet.getDdlBlacklist().contains(DDLOperation.CREATE_TABLE)) &&
-      !snapshotTrackingTables.contains(table) && Boolean.TRUE.equals(snapshot)) {
+    if ((readAllTables || !sourceTable.getDdlBlacklist().contains(DDLOperation.CREATE_TABLE)) &&
+      !snapshotTrackingTables.contains(trackingTable) && Boolean.TRUE.equals(snapshot)) {
       LOG.info("Snapshotting for table {} in database {} started", tableName, databaseName);
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
@@ -140,10 +141,10 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
                      .setSchema(schema)
                      .setPrimaryKey(primaryKeyFields)
                      .build());
-      snapshotTrackingTables.add(table);
+      snapshotTrackingTables.add(trackingTable);
     }
 
-    if (!readAllTables && blacklistEventSet.getDmlBlacklist().contains(op)) {
+    if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {
       // do nothing due to it was not set to read all tables and this DML op has been blacklisted for this table
       return;
     }
