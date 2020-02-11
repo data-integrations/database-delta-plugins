@@ -64,8 +64,14 @@ public final class Records {
    * @param columns
    */
   public static StructuredRecord keepSelectedColumns(StructuredRecord record, Set<SourceColumn> columns) {
-    if (columns == null || columns.isEmpty()) {
+    if (columns == null) {
+      // this should not happen
       return null;
+    }
+
+    // If columns set is empty, it means user wanna have all the columns by default.
+    if (columns.isEmpty()) {
+      return record;
     }
 
     Schema schema = record.getSchema();
