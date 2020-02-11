@@ -22,7 +22,7 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.EventReaderDefinition;
 import io.cdap.delta.api.Offset;
-import io.cdap.delta.common.BlacklistEventSet;
+import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.common.DBSchemaHistory;
 import io.debezium.config.Configuration;
 import io.debezium.connector.oracle.OracleConnector;
@@ -73,14 +73,13 @@ public class OracleEventReader implements EventReader {
       throw new RuntimeException("Unable to load jdbc native libraries.");
     }
 
-    Map<String, BlacklistEventSet> sourceTableBlacklistEventMap = definition.getTables().stream().collect(
+    Map<String, SourceTable> sourceTableMap = definition.getTables().stream().collect(
       Collectors.toMap(
-        sourceTable -> {
-          String schema = sourceTable.getSchema();
-          String table = sourceTable.getTable();
+        t -> {
+          String schema = t.getSchema();
+          String table = t.getTable();
           return schema == null ? table : schema + "." + table;
-        },
-        sourceTable -> new BlacklistEventSet(sourceTable.getDmlBlacklist(), sourceTable.getDdlBlacklist())));
+          }, t -> t));
 
     Configuration.Builder builder = Configuration.create()
       .with("connector.class", OracleConnector.class.getName())
@@ -104,7 +103,7 @@ public class OracleEventReader implements EventReader {
       // below is a workaround fix for ORA-21560 issue, Jira to track: https://issues.cask.co/browse/PLUGIN-105
       .with("database.oracle.version", 11)
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
-      .with("table.whitelist", String.join(",", sourceTableBlacklistEventMap.keySet()))
+      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
       .build();
 
     DBSchemaHistory.deltaRuntimeContext = context;
@@ -115,7 +114,7 @@ public class OracleEventReader implements EventReader {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
-        .notifying(new OracleSourceRecordConsumer(config.getDbName(), emitter, sourceTableBlacklistEventMap))
+        .notifying(new OracleSourceRecordConsumer(config.getDbName(), emitter, sourceTableMap))
         .using((success, message, error) -> {
           if (!success) {
             LOG.error("Failed - {}", message, error);
