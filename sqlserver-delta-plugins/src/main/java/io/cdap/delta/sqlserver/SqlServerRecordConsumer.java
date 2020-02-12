@@ -118,8 +118,16 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
     
     Long ingestTime = val.get("ts_ms");
-    emitter.emit(new DMLEvent(recordOffset, op, databaseName, tableName, value, null,
-                              // just a safefy check to avoid NPE warning
-                              ingestTime == null ? 0L : ingestTime));
+    // TODO: [CDAP-16295] set up snapshot state for SqlServer Source
+    DMLEvent dmlEvent = DMLEvent.builder()
+      .setOffset(recordOffset)
+      .setOperation(op)
+      .setDatabase(databaseName)
+      .setTable(tableName)
+      .setRow(value)
+      .setTransactionId(null)
+      .setIngestTimestamp(ingestTime == null ? 0L : ingestTime)
+      .build();
+    emitter.emit(dmlEvent);
   }
 }

@@ -69,6 +69,8 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
     Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
     Boolean snapshotCompleted = (Boolean) sourceOffset.get(OracleConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    boolean isSnapshot = Boolean.TRUE.equals(snapshot);
+    boolean isSnapshotCompleted = Boolean.TRUE.equals(snapshotCompleted);
 
     Map<String, byte[]> deltaOffset = generateCdapOffsets(sourceRecord);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
@@ -125,7 +127,7 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     // 2. it was not in tracking before
     // 3. it was marked as under snapshotting
     if ((readAllTables || !sourceTable.getDdlBlacklist().contains(DDLOperation.CREATE_TABLE)) &&
-      !snapshotTrackingTables.contains(trackingTable) && Boolean.TRUE.equals(snapshot)) {
+      !snapshotTrackingTables.contains(trackingTable) && isSnapshot) {
       LOG.info("Snapshotting for table {} in database {} started", tableName, databaseName);
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
@@ -140,6 +142,7 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
                      .setTable(tableName)
                      .setSchema(schema)
                      .setPrimaryKey(primaryKeyFields)
+                     .setSnapshot(isSnapshot)
                      .build());
       snapshotTrackingTables.add(trackingTable);
     }
@@ -149,12 +152,20 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    if (op == DMLOperation.DELETE) {
-      emitter.emit(new DMLEvent(recordOffset, op, databaseName, tableName, before, transactionId, ingestTime));
-    } else {
-      emitter.emit(new DMLEvent(recordOffset, op, databaseName, tableName, after, transactionId, ingestTime));
+    DMLEvent.Builder builder = DMLEvent.builder()
+      .setDatabase(databaseName)
+      .setOffset(recordOffset)
+      .setTable(tableName)
+      .setIngestTimestamp(ingestTime)
+      .setOperation(op)
+      .setTransactionId(transactionId);
 
-      if (Boolean.TRUE.equals(snapshotCompleted)) {
+    if (op == DMLOperation.DELETE) {
+      emitter.emit(builder.setRow(before).setSnapshot(isSnapshot).build());
+    } else {
+      emitter.emit(builder.setRow(after).setSnapshot(isSnapshot).build());
+
+      if (isSnapshotCompleted) {
         LOG.info("Snapshotting for table {} in database {} completed", tableName, databaseName);
       }
     }
