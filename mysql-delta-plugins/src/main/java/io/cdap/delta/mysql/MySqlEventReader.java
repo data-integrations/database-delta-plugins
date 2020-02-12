@@ -255,10 +255,18 @@ public class MySqlEventReader implements EventReader {
           StructuredRecord before = val.get("before");
           StructuredRecord after = val.get("after");
           Long ingestTime = val.get("ts_ms");
+          // TODO: [CDAP-16294] set up snapshot state for MySQL Source
+          DMLEvent.Builder builder = DMLEvent.builder()
+            .setOffset(recordOffset)
+            .setOperation(op)
+            .setDatabase(database)
+            .setTable(table)
+            .setTransactionId(transactionId)
+            .setIngestTimestamp(ingestTime);
           if (op == DMLOperation.DELETE) {
-            emitter.emit(new DMLEvent(recordOffset, op, database, table, before, transactionId, ingestTime));
+            emitter.emit(builder.setRow(before).build());
           } else {
-            emitter.emit(new DMLEvent(recordOffset, op, database, table, after, transactionId, ingestTime));
+            emitter.emit(builder.setRow(after).build());
           }
         })
         .using((success, message, error) -> {
