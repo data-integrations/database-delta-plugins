@@ -38,7 +38,9 @@ import java.sql.JDBCType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -141,10 +143,14 @@ public class OracleTableRegistry implements TableRegistry {
     String schema = null;
     try (ResultSet columnResults = dbMeta.getColumns(catalog, null, table, null)) {
       while (columnResults.next()) {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("COLUMN_LENGTH", columnResults.getString("COLUMN_SIZE"));
+        properties.put("SCALE", columnResults.getString("DECIMAL_DIGITS"));
         schema = columnResults.getString("TABLE_SCHEM");
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
                                      JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
-                                     columnResults.getBoolean("NULLABLE")));
+                                     columnResults.getBoolean("NULLABLE"),
+                                     properties));
       }
     }
     if (columns.isEmpty()) {
