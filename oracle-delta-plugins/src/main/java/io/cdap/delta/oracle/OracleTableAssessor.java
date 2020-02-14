@@ -31,11 +31,14 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Table assessor for oracle.
  */
 public class OracleTableAssessor implements TableAssessor<TableDetail> {
+  static final String COLUMN_LENGTH = "COLUMN_LENGTH";
+  static final String SCALE = "SCALE";
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -69,13 +72,18 @@ public class OracleTableAssessor implements TableAssessor<TableDetail> {
         schema = Schema.of(Schema.Type.STRING);
         break;
       case Types.NUMERIC:
-        // NUMERIC contains precision and scale, it will depend on that number to do the conversion, for unblocking
-        // current test table which defines ID as NUMBER(4), will hardcode it to map to INT.
-        // Loop back once this task CDAP-16262 is done.
-        schema = Schema.of(Schema.Type.INT);
-        break;
       case Types.DECIMAL:
-        schema = Schema.of(Schema.LogicalType.DECIMAL);
+        Map<String, String> properties = detail.getProperties();
+        // For numeric/decimal columns, this 'COLUMN_LENGTH' represents the precision
+        int precision = Integer.parseInt(properties.get(COLUMN_LENGTH));
+        int scale = Integer.parseInt(properties.get(SCALE));
+
+        if (scale == 0) {
+          // With 10 digits we can represent 2^32 and LONG is required
+          schema = precision > 9 ? Schema.of(Schema.Type.LONG) : Schema.of(Schema.Type.INT);
+        } else {
+          schema = Schema.decimalOf(precision, scale);
+        }
         break;
       case Types.FLOAT:
       case Types.DOUBLE:
