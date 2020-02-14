@@ -37,6 +37,8 @@ import java.util.Map;
  * Table assessor for oracle.
  */
 public class OracleTableAssessor implements TableAssessor<TableDetail> {
+  static final String COLUMN_LENGTH = "COLUMN_LENGTH";
+  static final String SCALE = "SCALE";
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -73,8 +75,8 @@ public class OracleTableAssessor implements TableAssessor<TableDetail> {
       case Types.DECIMAL:
         Map<String, String> properties = detail.getProperties();
         // For numeric/decimal columns, this 'COLUMN_LENGTH' represents the precision
-        int precision = Integer.parseInt(properties.get("COLUMN_LENGTH"));
-        int scale = Integer.parseInt(properties.get("SCALE"));
+        int precision = Integer.parseInt(properties.get(COLUMN_LENGTH));
+        int scale = Integer.parseInt(properties.get(SCALE));
 
         if (scale == 0) {
           // With 10 digits we can represent 2^32 and LONG is required

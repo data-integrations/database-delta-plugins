@@ -144,8 +144,8 @@ public class OracleTableRegistry implements TableRegistry {
     try (ResultSet columnResults = dbMeta.getColumns(catalog, null, table, null)) {
       while (columnResults.next()) {
         Map<String, String> properties = new HashMap<>();
-        properties.put("COLUMN_LENGTH", columnResults.getString("COLUMN_SIZE"));
-        properties.put("SCALE", columnResults.getString("DECIMAL_DIGITS"));
+        properties.put(OracleTableAssessor.COLUMN_LENGTH, columnResults.getString("COLUMN_SIZE"));
+        properties.put(OracleTableAssessor.SCALE, columnResults.getString("DECIMAL_DIGITS"));
         schema = columnResults.getString("TABLE_SCHEM");
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
                                      JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
