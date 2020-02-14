@@ -49,8 +49,8 @@ public class OracleConfig extends PluginConfig {
   @Description("Name of the JDBC plugin to use.")
   private String jdbcPluginName;
 
-  // TODO: implement the proper way load JDBC from remote path
-  @Description("Path to load JDBC native libraries from local.")
+  // TODO: implement the proper way load oracle instant client libraries from remote path
+  @Description("Path to load oracle instant client libraries from local.")
   private String libPath;
 
   @Nullable
