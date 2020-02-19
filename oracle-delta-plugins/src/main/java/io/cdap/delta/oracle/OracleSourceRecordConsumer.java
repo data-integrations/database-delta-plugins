@@ -158,16 +158,26 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
       .setTable(tableName)
       .setIngestTimestamp(ingestTime)
       .setOperation(op)
+      .setSnapshot(isSnapshot)
       .setTransactionId(transactionId);
 
-    if (op == DMLOperation.DELETE) {
-      emitter.emit(builder.setRow(before).setSnapshot(isSnapshot).build());
-    } else {
-      emitter.emit(builder.setRow(after).setSnapshot(isSnapshot).build());
+    switch (op) {
+      case INSERT:
+        emitter.emit(builder.setRow(after).build());
+        break;
+      case DELETE:
+        emitter.emit(builder.setRow(before).build());
+        break;
+      case UPDATE:
+        emitter.emit(builder.setPreviousRow(before).setRow(after).build());
+        break;
+      default:
+        LOG.warn("Skipping unknown operation type '{}'", op);
+        return;
+    }
 
-      if (isSnapshotCompleted) {
-        LOG.info("Snapshotting for table {} in database {} completed", tableName, databaseName);
-      }
+    if (isSnapshotCompleted) {
+      LOG.info("Snapshotting for table {} in database {} completed", tableName, databaseName);
     }
   }
 
