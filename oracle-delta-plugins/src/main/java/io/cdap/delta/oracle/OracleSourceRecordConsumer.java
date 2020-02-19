@@ -177,7 +177,7 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     }
 
     if (isSnapshotCompleted) {
-      LOG.info("Snapshotting for table {} in database {} completed", tableName, databaseName);
+      LOG.info("Finished reading snapshot events for table {} in database {}", tableName, databaseName);
     }
   }
 
