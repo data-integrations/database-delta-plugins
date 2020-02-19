@@ -74,7 +74,7 @@ public class OracleEventReader implements EventReader {
       fieldSysPath.setAccessible(true);
       fieldSysPath.set(null, null);
     } catch (Exception e) {
-      throw new RuntimeException("Unable to load jdbc native libraries.");
+      throw new RuntimeException(String.format("Unable to load jdbc native libraries: %s", e.getMessage()), e);
     }
 
     // This is a hacky way to load xstream jar. What we do here is using URLClassLoader reflection to invoke
@@ -91,7 +91,7 @@ public class OracleEventReader implements EventReader {
       method.setAccessible(true);
       method.invoke(classLoader, url);
     } catch (Exception e) {
-      throw new RuntimeException("Unable to load xstream.jar to class loader.");
+      throw new RuntimeException(String.format("Unable to load xstream.jar to class loader: %s", e.getMessage()), e);
     }
 
     Map<String, SourceTable> sourceTableMap = definition.getTables().stream().collect(
