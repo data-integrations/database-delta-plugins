@@ -68,6 +68,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
+    boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY);
 
     DMLOperation op;
     String opStr = val.get("op");
@@ -97,12 +98,12 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     SourceTable table = new SourceTable(databaseName, tableName);
     DDLEvent.Builder builder = DDLEvent.builder()
                                  .setDatabase(databaseName)
-                                 .setOffset(recordOffset);
+                                 .setOffset(recordOffset)
+                                 .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
     // send the ddl event if the first see the table and the it is in snapshot
-    if (!trackingTables.contains(table) &&
-          Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY))) {
+    if (!trackingTables.contains(table) && isSnapshot) {
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();
       if (fields != null && !fields.isEmpty()) {
@@ -125,6 +126,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       .setDatabase(databaseName)
       .setTable(tableName)
       .setRow(value)
+      .setSnapshot(isSnapshot)
       .setTransactionId(null)
       .setIngestTimestamp(ingestTime == null ? 0L : ingestTime)
       .build();
