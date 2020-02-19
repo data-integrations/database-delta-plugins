@@ -59,7 +59,7 @@
         },
         {
           "name": "libPath",
-          "label": "Oracle JDBC Native Library Path",
+          "label": "Oracle Instant Client Library Path",
           "widget-type": "textbox"
         }
       ]

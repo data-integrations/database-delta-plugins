@@ -31,7 +31,11 @@ import io.debezium.embedded.EmbeddedEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -70,7 +74,24 @@ public class OracleEventReader implements EventReader {
       fieldSysPath.setAccessible(true);
       fieldSysPath.set(null, null);
     } catch (Exception e) {
-      throw new RuntimeException("Unable to load jdbc native libraries.");
+      throw new RuntimeException(String.format("Unable to load jdbc native libraries: %s", e.getMessage()), e);
+    }
+
+    // This is a hacky way to load xstream jar. What we do here is using URLClassLoader reflection to invoke
+    // protected 'addURL(URL url)' method to bind xstream jar into our current class loader which is a
+    // PluginClassLoader. The reason why this is hacky is that Java 9+ will warn that
+    // URLClassLoader.class.getDeclaredMethod("addURL", URL.class) is an illegal use of reflection.
+    // TODO: CDAP-16311 Have a proper way to register user jars into CDAP
+    ClassLoader classLoader = getClass().getClassLoader();
+    try {
+      String jarPath = config.getLibPath() + "/xstreams.jar";
+      File file = new File(jarPath);
+      URL url = file.toURI().toURL();
+      Method method = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
+      method.setAccessible(true);
+      method.invoke(classLoader, url);
+    } catch (Exception e) {
+      throw new RuntimeException(String.format("Unable to load xstream.jar to class loader: %s", e.getMessage()), e);
     }
 
     Map<String, SourceTable> sourceTableMap = definition.getTables().stream().collect(
@@ -108,7 +129,7 @@ public class OracleEventReader implements EventReader {
 
     DBSchemaHistory.deltaRuntimeContext = context;
     ClassLoader oldCL = Thread.currentThread().getContextClassLoader();
-    Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+    Thread.currentThread().setContextClassLoader(classLoader);
 
     try {
       // Create the engine with this configuration ...
