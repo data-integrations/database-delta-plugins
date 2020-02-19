@@ -86,7 +86,9 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     StructuredRecord key = Records.convert((Struct) sourceRecord.key());
     String recordName = key.getSchema().getRecordName();
     String tableName = recordName == null ? "" : recordName.split("\\.")[2];
-    StructuredRecord value = op == DMLOperation.DELETE ? val.get("before") : val.get("after");
+    StructuredRecord before = val.get("before");
+    StructuredRecord after = val.get("after");
+    StructuredRecord value = op == DMLOperation.DELETE ? before : after;
 
     if (value == null) {
       // this is a safety check to prevent npe warning, it should not be null
@@ -119,7 +121,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
     
     Long ingestTime = val.get("ts_ms");
-    DMLEvent dmlEvent = DMLEvent.builder()
+    DMLEvent.Builder dmlBuilder = DMLEvent.builder()
       .setOffset(recordOffset)
       .setOperation(op)
       .setDatabase(databaseName)
@@ -127,8 +129,13 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       .setRow(value)
       .setSnapshot(isSnapshot)
       .setTransactionId(null)
-      .setIngestTimestamp(ingestTime == null ? 0L : ingestTime)
-      .build();
-    emitter.emit(dmlEvent);
+      .setIngestTimestamp(ingestTime == null ? 0L : ingestTime);
+
+    // It is required for the source to provide the previous row if the operation is 'UPDATE'
+    if (op == DMLOperation.UPDATE) {
+      dmlBuilder.setPreviousRow(before);
+    }
+
+    emitter.emit(dmlBuilder.build());
   }
 }
