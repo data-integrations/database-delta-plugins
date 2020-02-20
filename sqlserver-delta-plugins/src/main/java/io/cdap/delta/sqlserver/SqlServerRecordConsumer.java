@@ -68,7 +68,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
-    boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY);
+    boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
 
     DMLOperation op;
     String opStr = val.get("op");
@@ -119,7 +119,6 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
     
     Long ingestTime = val.get("ts_ms");
-    // TODO: [CDAP-16295] set up snapshot state for SqlServer Source
     DMLEvent dmlEvent = DMLEvent.builder()
       .setOffset(recordOffset)
       .setOperation(op)
