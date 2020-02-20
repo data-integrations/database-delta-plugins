@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,11 +62,14 @@ public class SqlServerEventReader implements EventReader {
   public void start(Offset offset) {
     // this is needed since sql server does not return the database information in the record
     String databaseName = config.getDatabase();
-    List<String> tableList = tables.stream().map(sourceTable -> {
-      String schema = sourceTable.getSchema();
-      String table = sourceTable.getTable();
-      return schema == null ? table : schema + "." + table;
-    }).collect(Collectors.toList());
+
+    Map<String, SourceTable> sourceTableMap = tables.stream().collect(
+      Collectors.toMap(
+        t -> {
+          String schema = t.getSchema();
+          String table = t.getTable();
+          return schema == null ? table : schema + "." + table;
+        }, t -> t));
 
     // offset config
     Configuration.Builder builder = Configuration.create()
@@ -84,7 +88,7 @@ public class SqlServerEventReader implements EventReader {
         .with("database.password", config.getPassword())
         .with("database.history", DBSchemaHistory.class.getName())
         .with("database.dbname", databaseName)
-        .with("table.whitelist", String.join(",", tableList))
+        .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
         .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
         .with("database.serverTimezone", config.getServerTimezone())
         .build();
@@ -97,7 +101,7 @@ public class SqlServerEventReader implements EventReader {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
                  .using(debeziumConf)
-                 .notifying(new SqlServerRecordConsumer(emitter, databaseName))
+                 .notifying(new SqlServerRecordConsumer(emitter, databaseName, sourceTableMap))
                  .using((success, message, error) -> {
                    if (!success) {
                      LOG.error("Failed - {}", message, error);

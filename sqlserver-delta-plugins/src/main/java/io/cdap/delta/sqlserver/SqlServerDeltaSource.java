@@ -54,8 +54,8 @@ public class SqlServerDeltaSource implements DeltaSource {
   }
 
   @Override
-  public EventReader createReader(EventReaderDefinition tables, DeltaSourceContext context, EventEmitter emitter) {
-    return new SqlServerEventReader(tables.getTables(), config, context, emitter);
+  public EventReader createReader(EventReaderDefinition definition, DeltaSourceContext context, EventEmitter emitter) {
+    return new SqlServerEventReader(definition.getTables(), config, context, emitter);
   }
 
   @Override

@@ -122,12 +122,11 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
         return;
     }
 
-    // send the ddl event iff all the following conditions have been met:
-    // 1. it was set to read all tables or CREATE_TABLE DDL op is not blacklisted for this table
-    // 2. it was not in tracking before
-    // 3. it was marked as under snapshotting
-    if ((readAllTables || !sourceTable.getDdlBlacklist().contains(DDLOperation.CREATE_TABLE)) &&
-      !snapshotTrackingTables.contains(trackingTable) && isSnapshot) {
+    // send the ddl event iff all the following two conditions have been met:
+    // 1. it was not in tracking before
+    // 2. it was marked as under snapshotting
+    // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
+    if (!snapshotTrackingTables.contains(trackingTable) && isSnapshot) {
       LOG.info("Snapshotting for table {} in database {} started", tableName, databaseName);
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
