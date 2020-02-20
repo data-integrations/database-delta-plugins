@@ -94,8 +94,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     String schemaName = splits[1];
     String tableName  = splits[2];
     String sourceTableId = schemaName + "." + tableName;
-    // If the map is empty, we should read all DML/DDL (except CREATE_TABLE) events and columns of all tables
-    // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
+    // If the map is empty, we should read all DDL/DML events and columns of all tables
     boolean readAllTables = sourceTableMap.isEmpty();
     SourceTable sourceTable = sourceTableMap.get(sourceTableId);
     if (!readAllTables && sourceTable == null) {
@@ -123,7 +122,8 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
-    // send the ddl event if the first see the table and the it is in snapshot
+    // send the ddl event if the first see the table and the it is in snapshot.
+    // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
     if (!trackingTables.contains(trackingTable) && isSnapshot) {
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();

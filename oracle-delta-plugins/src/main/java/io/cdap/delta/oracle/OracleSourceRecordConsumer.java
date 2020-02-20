@@ -84,8 +84,8 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     String schemaName = splits[1];
     String tableName  = splits[2];
     String sourceTableId = schemaName + "." + tableName;
-    // If the map is empty, we should read all DML/DDL (except CREATE_TABLE) events and columns of all tables
-    // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
+    // If the map is empty, we should read all DDL/DML events and columns of all tables, basically, we should not do
+    // any blacklist for tables.
     boolean readAllTables = sourceTableMap.isEmpty();
     SourceTable sourceTable = sourceTableMap.get(sourceTableId);
     if (!readAllTables && sourceTable == null) {
@@ -125,6 +125,7 @@ public class OracleSourceRecordConsumer implements Consumer<SourceRecord> {
     // send the ddl event iff all the following two conditions have been met:
     // 1. it was not in tracking before
     // 2. it was marked as under snapshotting
+    // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
     if (!snapshotTrackingTables.contains(trackingTable) && isSnapshot) {
       LOG.info("Snapshotting for table {} in database {} started", tableName, databaseName);
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
