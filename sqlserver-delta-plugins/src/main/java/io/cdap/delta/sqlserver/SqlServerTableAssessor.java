@@ -31,11 +31,14 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Sql server table assessor
  */
 public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
+  static final String COLUMN_LENGTH = "COLUMN_LENGTH";
+  static final String SCALE = "SCALE";
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -80,8 +83,21 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
 
       case Types.NUMERIC:
       case Types.DECIMAL:
-        // TODO: CDAP-16262 Add scale and precision to ColumnDetail to correctly determine the schema type
-        schema = Schema.of(Schema.Type.DOUBLE);
+        Map<String, String> properties = detail.getProperties();
+        // For numeric/decimal columns, this 'COLUMN_LENGTH' represents the precision
+        int precision = Integer.parseInt(properties.get(COLUMN_LENGTH));
+        int scale = Integer.parseInt(properties.get(SCALE));
+
+        // Note here, according to the official sql server doc, precision must be a value from 1 to 38 and scale must
+        // be a value from 0 to precision.
+        if (scale == 0) {
+          // With 10 digits we can represent 2^32 and LONG is required
+          schema = precision > 9 ? Schema.of(Schema.Type.LONG) : Schema.of(Schema.Type.INT);
+        } else {
+          // With the case that scale is greater than 0, the precision here is always equal to the number of significant
+          // digits, we can just reuse the precision to form cdap decimal schema.
+          schema = Schema.decimalOf(precision, scale);
+        }
         break;
 
       case Types.DOUBLE:
