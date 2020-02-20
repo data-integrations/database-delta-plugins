@@ -16,7 +16,6 @@
 
 package io.cdap.delta.mysql;
 
-import com.mysql.cj.MysqlType;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
@@ -31,6 +30,7 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.JDBCType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -106,7 +106,7 @@ public class MySqlTableRegistry implements TableRegistry {
     try (ResultSet columnResults = dbMeta.getColumns(db, null, table, null)) {
       while (columnResults.next()) {
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
-                                     MysqlType.getByJdbcType(columnResults.getInt("DATA_TYPE")),
+                                     JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
                                      columnResults.getBoolean("NULLABLE")));
       }
     }
