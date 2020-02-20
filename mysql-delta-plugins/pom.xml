@@ -32,6 +32,12 @@
       <groupId>io.debezium</groupId>
       <artifactId>debezium-connector-mysql</artifactId>
       <version>${debezium.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>mysql</groupId>
+          <artifactId>mysql-connector-java</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.cdap.delta</groupId>
@@ -49,7 +55,8 @@
         <extensions>true</extensions>
         <configuration>
           <instructions>
-            <_exportcontents>io.cdap.delta.mysql.*</_exportcontents>
+            <!-- disabled until the plugin is complete -->
+            <!--_exportcontents>io.cdap.delta.mysql.*</_exportcontents-->
             <Embed-Dependency>*;inline=false;scope=compile</Embed-Dependency>
             <Embed-Transitive>true</Embed-Transitive>
             <Embed-Directory>lib</Embed-Directory>
