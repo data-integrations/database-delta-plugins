@@ -69,10 +69,14 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
 <<<<<<< HEAD
+<<<<<<< HEAD
     boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
 =======
     boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY);
 >>>>>>> Add pipeline snapshot status for sql-server record consumer.
+=======
+    boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
+>>>>>>> Remove TODO.
 
     DMLOperation op;
     String opStr = val.get("op");
