@@ -51,11 +51,13 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final String databaseName;
   // this is hack to track the tables getting created or not
   private final Set<SourceTable> trackingTables;
+  private final Map<String, SourceTable> sourceTableMap;
 
-  public SqlServerRecordConsumer(EventEmitter emitter, String databaseName) {
+  public SqlServerRecordConsumer(EventEmitter emitter, String databaseName, Map<String, SourceTable> sourceTableMap) {
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.trackingTables = new HashSet<>();
+    this.sourceTableMap = sourceTableMap;
   }
 
   @Override
@@ -66,7 +68,6 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
     Map<String, byte[]> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
-
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
 
@@ -85,9 +86,26 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
     StructuredRecord key = Records.convert((Struct) sourceRecord.key());
     String recordName = key.getSchema().getRecordName();
-    String tableName = recordName == null ? "" : recordName.split("\\.")[2];
-    StructuredRecord before = val.get("before");
-    StructuredRecord after = val.get("after");
+    // the record name will always be like this: [db.server.name].[schema].[table].Envelope
+    if (recordName == null) {
+      return; // safety check to avoid NPE
+    }
+    String[] splits = recordName.split("\\.");
+    String schemaName = splits[1];
+    String tableName = splits[2];
+    String sourceTableId = schemaName + "." + tableName;
+    // If the map is empty, we should read all DDL/DML events and columns of all tables
+    boolean readAllTables = sourceTableMap.isEmpty();
+    SourceTable sourceTable = sourceTableMap.get(sourceTableId);
+    if (!readAllTables && sourceTable == null) {
+      // shouldn't happen
+      return;
+    }
+
+    StructuredRecord before = readAllTables ? val.get("before") :
+      Records.keepSelectedColumns(val.get("before"), sourceTable.getColumns());
+    StructuredRecord after = readAllTables ? val.get("after") :
+      Records.keepSelectedColumns(val.get("after"), sourceTable.getColumns());
     StructuredRecord value = op == DMLOperation.DELETE ? before : after;
 
     if (value == null) {
@@ -97,15 +115,16 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     // this is a hack to send DDL event if we first see this table, now all the stuff is in memory
-    SourceTable table = new SourceTable(databaseName, tableName);
+    SourceTable trackingTable = new SourceTable(databaseName, tableName);
     DDLEvent.Builder builder = DDLEvent.builder()
                                  .setDatabase(databaseName)
                                  .setOffset(recordOffset)
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
-    // send the ddl event if the first see the table and the it is in snapshot
-    if (!trackingTables.contains(table) && isSnapshot) {
+    // send the ddl event if the first see the table and the it is in snapshot.
+    // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
+    if (!trackingTables.contains(trackingTable) && isSnapshot) {
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();
       if (fields != null && !fields.isEmpty()) {
@@ -117,7 +136,12 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
                      .setSchema(schema)
                      .setPrimaryKey(primaryFields)
                      .build());
-      trackingTables.add(table);
+      trackingTables.add(trackingTable);
+    }
+
+    if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {
+      // do nothing due to it was not set to read all tables and the DML op has been blacklisted for this table
+      return;
     }
     
     Long ingestTime = val.get("ts_ms");

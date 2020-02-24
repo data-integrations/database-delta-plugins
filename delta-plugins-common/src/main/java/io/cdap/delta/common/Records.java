@@ -18,6 +18,7 @@ package io.cdap.delta.common;
 
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.delta.api.SourceColumn;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
@@ -27,6 +28,7 @@ import org.apache.kafka.connect.data.Struct;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +53,39 @@ public class Records {
       fields.add(Schema.Field.of(column.name(), convert(converters.schemaBuilder(column).build())));
     }
     return Schema.recordOf(table.id().table(), fields);
+  }
+
+  /**
+   * Return a new structured record which will only contain selected columns for the table.
+   *
+   * @param record
+   * @param columns
+   */
+  public static StructuredRecord keepSelectedColumns(StructuredRecord record, Set<SourceColumn> columns) {
+    if (columns == null) {
+      // this should not happen
+      return null;
+    }
+
+    // If columns set is empty, it means user wanna have all the columns by default.
+    if (columns.isEmpty()) {
+      return record;
+    }
+
+    Schema schema = record.getSchema();
+    List<Schema.Field> schemaFields = new ArrayList<>(columns.size());
+    for (SourceColumn column : columns) {
+      schemaFields.add(schema.getField(column.getName()));
+    }
+
+    Schema newSchema = Schema.recordOf(schema.getRecordName(), schemaFields);
+    StructuredRecord.Builder builder = StructuredRecord.builder(newSchema);
+    for (SourceColumn column : columns) {
+      String columnName = column.getName();
+      builder.set(columnName, record.get(columnName));
+    }
+
+    return builder.build();
   }
 
   /**
