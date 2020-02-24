@@ -26,7 +26,6 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,17 +74,15 @@ public class Records {
 
     Schema schema = record.getSchema();
     List<Schema.Field> schemaFields = new ArrayList<>(columns.size());
-    Map<String, Object> recordFields = new HashMap<>(columns.size());
     for (SourceColumn column : columns) {
-      String columnName = column.getName();
-      schemaFields.add(schema.getField(columnName));
-      recordFields.put(columnName, record.get(columnName));
+      schemaFields.add(schema.getField(column.getName()));
     }
 
     Schema newSchema = Schema.recordOf(schema.getRecordName(), schemaFields);
     StructuredRecord.Builder builder = StructuredRecord.builder(newSchema);
-    for (Map.Entry<String, Object> field : recordFields.entrySet()) {
-      builder.set(field.getKey(), field.getValue());
+    for (SourceColumn column : columns) {
+      String columnName = column.getName();
+      builder.set(columnName, record.get(columnName));
     }
 
     return builder.build();

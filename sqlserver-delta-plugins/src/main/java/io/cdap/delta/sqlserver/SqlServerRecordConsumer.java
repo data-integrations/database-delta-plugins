@@ -92,7 +92,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
     String[] splits = recordName.split("\\.");
     String schemaName = splits[1];
-    String tableName  = splits[2];
+    String tableName = splits[2];
     String sourceTableId = schemaName + "." + tableName;
     // If the map is empty, we should read all DDL/DML events and columns of all tables
     boolean readAllTables = sourceTableMap.isEmpty();
