@@ -68,7 +68,8 @@ public class Records {
     }
 
     // If columns set is empty, it means user wanna have all the columns by default.
-    if (columns.isEmpty()) {
+    // Or if the record itself is null, then just return it.
+    if (record == null || columns.isEmpty()) {
       return record;
     }
 
