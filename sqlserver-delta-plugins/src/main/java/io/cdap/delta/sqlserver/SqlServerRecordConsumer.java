@@ -102,10 +102,16 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    StructuredRecord before = readAllTables ? val.get("before") :
-      Records.keepSelectedColumns(val.get("before"), sourceTable.getColumns());
-    StructuredRecord after = readAllTables ? val.get("after") :
-      Records.keepSelectedColumns(val.get("after"), sourceTable.getColumns());
+    StructuredRecord before = val.get("before");
+    StructuredRecord after = val.get("after");
+    if (!readAllTables) {
+      if (before != null) {
+        before = Records.keepSelectedColumns(before, sourceTable.getColumns());
+      }
+      if (after != null) {
+        after = Records.keepSelectedColumns(after, sourceTable.getColumns());
+      }
+    }
     StructuredRecord value = op == DMLOperation.DELETE ? before : after;
 
     if (value == null) {
