@@ -37,8 +37,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -134,10 +136,14 @@ public class SqlServerTableRegistry implements TableRegistry {
     String schemaName = null;
     try (ResultSet columnResults = dbMeta.getColumns(db, null, table, null)) {
       while (columnResults.next()) {
+        Map<String, String> properties = new HashMap<>();
+        properties.put(SqlServerTableAssessor.COLUMN_LENGTH, columnResults.getString("COLUMN_SIZE"));
+        properties.put(SqlServerTableAssessor.SCALE, columnResults.getString("DECIMAL_DIGITS"));
         schemaName = columnResults.getString("TABLE_SCHEM");
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
                                      JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
-                                     columnResults.getBoolean("NULLABLE")));
+                                     columnResults.getBoolean("NULLABLE"),
+                                     properties));
       }
     }
     if (columns.isEmpty()) {

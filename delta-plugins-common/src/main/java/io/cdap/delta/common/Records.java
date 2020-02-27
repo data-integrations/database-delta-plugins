@@ -22,6 +22,7 @@ import io.cdap.delta.api.SourceColumn;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
@@ -151,7 +152,17 @@ public class Records {
         converted = Schema.of(Schema.Type.BOOLEAN);
         break;
       case BYTES:
-        converted = Schema.of(Schema.Type.BYTES);
+        // In debezium, it will convert NUMERIC/DECIMAL JDBC type to 'org.apache.kafka.connect.data.Decimal' by default.
+        // In order to distinguish between this Decimal schema with other BYTES type schema. We will check if the schema
+        // name is same with 'org.apache.kafka.connect.data.Decimal', if it is, then we will convert debezium Decimal to
+        // CDAP Decimal.
+        if (schema.name().equals(Decimal.class.getName())) {
+          int precision = Integer.parseInt(schema.parameters().get("connect.decimal.precision"));
+          int scale = Integer.parseInt(schema.parameters().get("scale"));
+          converted = Schema.decimalOf(precision, scale);
+        } else {
+          converted = Schema.of(Schema.Type.BYTES);
+        }
         break;
       case STRING:
         converted = Schema.of(Schema.Type.STRING);
