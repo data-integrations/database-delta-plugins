@@ -22,11 +22,13 @@ import io.cdap.delta.api.SourceColumn;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
+import io.debezium.time.Date;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +39,8 @@ import java.util.stream.Collectors;
  * Utilities for converting Records and Schemas.
  */
 public class Records {
+  private static final String PRECISION_NAME = "connect.decimal.precision";
+  private static final String SCALE_NAME = "scale";
 
   private Records() {
     // no-op
@@ -111,11 +115,14 @@ public class Records {
       String fieldName = field.getName();
       Field debeziumField = struct.schema().field(fieldName);
       Object val = convert(debeziumField.schema(), struct.get(fieldName));
-      Schema.LogicalType logicalType = field.getSchema().getLogicalType();
-      // TODO: This is a special handling for DECIMAL logical type, further logical types like DATE, TIMESTAMP, etc
-      // will be supported later on.
+      Schema fieldSchema = field.getSchema();
+      fieldSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullable() : fieldSchema;
+      Schema.LogicalType logicalType = fieldSchema.getLogicalType();
+      // TODO: [CDAP-16354] Handle Logical Type for TIME and TIMESTAMP later on.
       if (Schema.LogicalType.DECIMAL == logicalType) {
         builder.setDecimal(fieldName, (BigDecimal) val);
+      } else if (Schema.LogicalType.DATE == logicalType) {
+        builder.setDate(fieldName, LocalDate.ofEpochDay((int) val));
       } else {
         builder.set(fieldName, val);
       }
@@ -172,9 +179,9 @@ public class Records {
         // In order to distinguish between this Decimal schema with other BYTES type schema. We will check if the schema
         // name is same with 'org.apache.kafka.connect.data.Decimal', if it is, then we will convert debezium Decimal to
         // CDAP Decimal.
-        if (schema.name().equals(Decimal.class.getName())) {
-          int precision = Integer.parseInt(schema.parameters().get("connect.decimal.precision"));
-          int scale = Integer.parseInt(schema.parameters().get("scale"));
+        if (Decimal.LOGICAL_NAME.equals(schema.name())) {
+          int precision = Integer.parseInt(schema.parameters().get(PRECISION_NAME));
+          int scale = Integer.parseInt(schema.parameters().get(SCALE_NAME));
           converted = Schema.decimalOf(precision, scale);
         } else {
           converted = Schema.of(Schema.Type.BYTES);
@@ -186,7 +193,11 @@ public class Records {
       case INT8:
       case INT16:
       case INT32:
-        converted = Schema.of(Schema.Type.INT);
+        if (Date.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.DATE);
+        } else {
+          converted = Schema.of(Schema.Type.INT);
+        }
         break;
       case INT64:
         converted = Schema.of(Schema.Type.LONG);
