@@ -27,6 +27,7 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.common.DBSchemaHistory;
+import io.cdap.delta.common.NotifyingCompletionCallback;
 import io.cdap.delta.common.Records;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
@@ -269,11 +270,7 @@ public class MySqlEventReader implements EventReader {
             emitter.emit(builder.setRow(after).build());
           }
         })
-        .using((success, message, error) -> {
-          if (!success) {
-            LOG.error("Failed - {}", message, error);
-          }
-        })
+        .using(new NotifyingCompletionCallback(context))
         .build();
       executorService.submit(engine);
     } finally {
