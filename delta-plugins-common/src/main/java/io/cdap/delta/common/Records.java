@@ -22,9 +22,11 @@ import io.cdap.delta.api.SourceColumn;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -101,9 +103,24 @@ public class Records {
     schema = schema.isNullable() ? schema.getNonNullable() : schema;
 
     StructuredRecord.Builder builder = StructuredRecord.builder(schema);
-    for (Field field : struct.schema().fields()) {
-      builder.set(field.name(), convert(field.schema(), struct.get(field.name())));
+    if (schema.getFields() == null) {
+      return builder.build();
     }
+
+    for (Schema.Field field : schema.getFields()) {
+      String fieldName = field.getName();
+      Field debeziumField = struct.schema().field(fieldName);
+      Object val = convert(debeziumField.schema(), struct.get(fieldName));
+      Schema.LogicalType logicalType = field.getSchema().getLogicalType();
+      // TODO: This is a special handling for DECIMAL logical type, further logical types like DATE, TIMESTAMP, etc
+      // will be supported later on.
+      if (Schema.LogicalType.DECIMAL == logicalType) {
+        builder.setDecimal(fieldName, (BigDecimal) val);
+      } else {
+        builder.set(fieldName, val);
+      }
+    }
+
     return builder.build();
   }
 
@@ -151,7 +168,17 @@ public class Records {
         converted = Schema.of(Schema.Type.BOOLEAN);
         break;
       case BYTES:
-        converted = Schema.of(Schema.Type.BYTES);
+        // In debezium, it will convert NUMERIC/DECIMAL JDBC type to 'org.apache.kafka.connect.data.Decimal' by default.
+        // In order to distinguish between this Decimal schema with other BYTES type schema. We will check if the schema
+        // name is same with 'org.apache.kafka.connect.data.Decimal', if it is, then we will convert debezium Decimal to
+        // CDAP Decimal.
+        if (schema.name().equals(Decimal.class.getName())) {
+          int precision = Integer.parseInt(schema.parameters().get("connect.decimal.precision"));
+          int scale = Integer.parseInt(schema.parameters().get("scale"));
+          converted = Schema.decimalOf(precision, scale);
+        } else {
+          converted = Schema.of(Schema.Type.BYTES);
+        }
         break;
       case STRING:
         converted = Schema.of(Schema.Type.STRING);
