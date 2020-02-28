@@ -39,6 +39,8 @@ import java.util.stream.Collectors;
  * Utilities for converting Records and Schemas.
  */
 public class Records {
+  private static final String PRECISION_NAME = "connect.decimal.precision";
+  private static final String SCALE_NAME = "scale";
 
   private Records() {
     // no-op
@@ -116,7 +118,7 @@ public class Records {
       Schema fieldSchema = field.getSchema();
       fieldSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullable() : fieldSchema;
       Schema.LogicalType logicalType = fieldSchema.getLogicalType();
-      // TODO: Handle Logical Type for TIMESTAMP later on.
+      // TODO: [CDAP-16354] Handle Logical Type for TIME and TIMESTAMP later on.
       if (Schema.LogicalType.DECIMAL == logicalType) {
         builder.setDecimal(fieldName, (BigDecimal) val);
       } else if (Schema.LogicalType.DATE == logicalType) {
@@ -178,8 +180,8 @@ public class Records {
         // name is same with 'org.apache.kafka.connect.data.Decimal', if it is, then we will convert debezium Decimal to
         // CDAP Decimal.
         if (Decimal.LOGICAL_NAME.equals(schema.name())) {
-          int precision = Integer.parseInt(schema.parameters().get("connect.decimal.precision"));
-          int scale = Integer.parseInt(schema.parameters().get("scale"));
+          int precision = Integer.parseInt(schema.parameters().get(PRECISION_NAME));
+          int scale = Integer.parseInt(schema.parameters().get(SCALE_NAME));
           converted = Schema.decimalOf(precision, scale);
         } else {
           converted = Schema.of(Schema.Type.BYTES);
