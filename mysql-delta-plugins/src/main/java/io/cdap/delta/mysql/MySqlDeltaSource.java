@@ -77,6 +77,6 @@ public class MySqlDeltaSource implements DeltaSource {
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
-    return null;
+    return new MySqlTableAssessor();
   }
 }
