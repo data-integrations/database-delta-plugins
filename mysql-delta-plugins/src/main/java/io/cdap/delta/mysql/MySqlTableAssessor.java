@@ -98,16 +98,9 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
         schema = Schema.of(Schema.LogicalType.DATE);
         break;
       case Types.TIME:
-        support = ColumnSupport.PARTIAL;
-        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
-                                          Collections.emptyList());
         schema = Schema.of(Schema.LogicalType.TIME_MICROS);
         break;
       case Types.TIMESTAMP:
-        support = ColumnSupport.PARTIAL;
-        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds " +
-                                            "if the sql server type is Datatime2",
-                                          Collections.emptyList());
         schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
         break;
       case Types.BLOB:
