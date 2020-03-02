@@ -18,12 +18,14 @@ package io.cdap.delta.mysql;
 
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
 import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.api.assessment.TableSummary;
+import io.cdap.delta.common.ColumnEvaluation;
 import io.cdap.delta.common.DriverCleanup;
 
 import java.io.IOException;
@@ -34,7 +36,9 @@ import java.sql.JDBCType;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
@@ -91,7 +95,15 @@ public class MySqlTableRegistry implements TableRegistry {
 
   @Override
   public StandardizedTableDetail standardize(TableDetail tableDetail) {
-    Schema schema = Schema.recordOf("xyz", Schema.Field.of("x", Schema.of(Schema.Type.INT)));
+    List<Schema.Field> columnSchemas = new ArrayList<>();
+    for (ColumnDetail detail : tableDetail.getColumns()) {
+      ColumnEvaluation evaluation = MySqlTableAssessor.evaluateColumn(detail);
+      if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
+        throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
+      }
+      columnSchemas.add(evaluation.getField());
+    }
+    Schema schema = Schema.recordOf("outputSchema", columnSchemas);
     return new StandardizedTableDetail(tableDetail.getDatabase(), tableDetail.getTable(),
                                        tableDetail.getPrimaryKey(), schema);
   }
@@ -105,9 +117,13 @@ public class MySqlTableRegistry implements TableRegistry {
     List<ColumnDetail> columns = new ArrayList<>();
     try (ResultSet columnResults = dbMeta.getColumns(db, null, table, null)) {
       while (columnResults.next()) {
+        Map<String, String> properties = new HashMap<>();
+        properties.put(MySqlTableAssessor.COLUMN_LENGTH, columnResults.getString("COLUMN_SIZE"));
+        properties.put(MySqlTableAssessor.SCALE, columnResults.getString("DECIMAL_DIGITS"));
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
                                      JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
-                                     columnResults.getBoolean("NULLABLE")));
+                                     columnResults.getBoolean("NULLABLE"),
+                                     properties));
       }
     }
     if (columns.isEmpty()) {
