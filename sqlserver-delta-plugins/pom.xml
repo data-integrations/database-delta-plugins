@@ -32,6 +32,12 @@
       <groupId>io.debezium</groupId>
       <artifactId>debezium-connector-sqlserver</artifactId>
       <version>${debezium.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>com.microsoft.sqlserver</groupId>
+          <artifactId>mssql-jdbc</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.cdap.delta</groupId>
@@ -49,7 +55,7 @@
         <extensions>true</extensions>
         <configuration>
           <instructions>
-            <_exportcontents>io.cdap.delta.sqlserver.*</_exportcontents>
+            <_exportcontents>io.cdap.delta.sqlserver.*;io.debezium.connector.sqlserver.*</_exportcontents>
             <Embed-Dependency>*;inline=false;scope=compile</Embed-Dependency>
             <Embed-Transitive>true</Embed-Transitive>
             <Embed-Directory>lib</Embed-Directory>
