@@ -22,6 +22,7 @@ import io.cdap.delta.api.DDLEvent;
 import io.cdap.delta.api.DDLOperation;
 import io.cdap.delta.api.DMLEvent;
 import io.cdap.delta.api.DMLOperation;
+import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
@@ -32,6 +33,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -46,6 +48,7 @@ import java.util.stream.Collectors;
 public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private static final Logger LOG = LoggerFactory.getLogger(SqlServerRecordConsumer.class);
 
+  private final DeltaSourceContext context;
   private final EventEmitter emitter;
   // we need this since there is no way to get the db information from the source record
   private final String databaseName;
@@ -53,7 +56,9 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final Set<SourceTable> trackingTables;
   private final Map<String, SourceTable> sourceTableMap;
 
-  public SqlServerRecordConsumer(EventEmitter emitter, String databaseName, Map<String, SourceTable> sourceTableMap) {
+  SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
+                          Map<String, SourceTable> sourceTableMap) {
+    this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.trackingTables = new HashSet<>();
@@ -62,6 +67,11 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
   @Override
   public void accept(SourceRecord sourceRecord) {
+    try {
+      context.setOK();
+    } catch (IOException e) {
+      LOG.warn("Unable to set source state to OK.", e);
+    }
     if (sourceRecord.value() == null) {
       return;
     }

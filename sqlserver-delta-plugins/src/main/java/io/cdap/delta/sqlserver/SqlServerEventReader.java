@@ -22,13 +22,11 @@ import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.common.DBSchemaHistory;
+import io.cdap.delta.common.NotifyingCompletionCallback;
 import io.debezium.config.Configuration;
 import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.embedded.EmbeddedEngine;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -40,8 +38,6 @@ import java.util.stream.Collectors;
  * Sql server event reader
  */
 public class SqlServerEventReader implements EventReader {
-  private static final Logger LOG = LoggerFactory.getLogger(SqlServerEventReader.class);
-
   private final SqlServerConfig config;
   private final EventEmitter emitter;
   private final DeltaSourceContext context;
@@ -100,14 +96,10 @@ public class SqlServerEventReader implements EventReader {
     try {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-                 .using(debeziumConf)
-                 .notifying(new SqlServerRecordConsumer(emitter, databaseName, sourceTableMap))
-                 .using((success, message, error) -> {
-                   if (!success) {
-                     LOG.error("Failed - {}", message, error);
-                   }
-                 })
-                 .build();
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sourceTableMap))
+        .using(debeziumConf)
+        .using(new NotifyingCompletionCallback(context))
+        .build();
       executorService.submit(engine);
     } finally {
       Thread.currentThread().setContextClassLoader(oldCL);
