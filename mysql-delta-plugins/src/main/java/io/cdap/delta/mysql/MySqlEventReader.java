@@ -17,18 +17,13 @@
 package io.cdap.delta.mysql;
 
 import io.cdap.cdap.api.common.Bytes;
-import io.cdap.cdap.api.data.format.StructuredRecord;
-import io.cdap.delta.api.DDLEvent;
-import io.cdap.delta.api.DDLOperation;
-import io.cdap.delta.api.DMLEvent;
-import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.Offset;
+import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.common.DBSchemaHistory;
 import io.cdap.delta.common.NotifyingCompletionCallback;
-import io.cdap.delta.common.Records;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
@@ -36,23 +31,20 @@ import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.jdbc.TemporalPrecisionMode;
-import io.debezium.relational.Table;
-import io.debezium.relational.TableId;
 import io.debezium.relational.Tables;
 import io.debezium.relational.ddl.DdlParser;
-import io.debezium.relational.ddl.DdlParserListener;
-import org.apache.kafka.connect.data.Struct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Reads events from MySQL
@@ -63,9 +55,12 @@ public class MySqlEventReader implements EventReader {
   private final EventEmitter emitter;
   private final ExecutorService executorService;
   private final DeltaSourceContext context;
+  private final Set<SourceTable> sourceTables;
   private EmbeddedEngine engine;
 
-  public MySqlEventReader(MySqlConfig config, DeltaSourceContext context, EventEmitter emitter) {
+  public MySqlEventReader(Set<SourceTable> sourceTables, MySqlConfig config,
+                          DeltaSourceContext context, EventEmitter emitter) {
+    this.sourceTables = sourceTables;
     this.config = config;
     this.context = context;
     this.emitter = emitter;
@@ -74,6 +69,10 @@ public class MySqlEventReader implements EventReader {
 
   @Override
   public void start(Offset offset) {
+    // For MySQL, the unique table identifier in debezium is 'databaseName.tableName'
+    Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
+      Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
+
     /*
         OffsetBackingStore is pretty weird... keys are ByteBuffer representations of Strings like:
 
@@ -105,6 +104,7 @@ public class MySqlEventReader implements EventReader {
       .with("database.whitelist", config.getDatabase())
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
+      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
       .build();
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
@@ -112,164 +112,13 @@ public class MySqlEventReader implements EventReader {
     MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
     DdlParser ddlParser = mysqlConf.getDdlParsingMode().getNewParserInstance(mySqlValueConverters, tableId -> true);
 
-    /*
-       For ddl, struct contains 3 top level fields:
-         source struct
-         databaseName string
-         ddl string
-
-       Before every DDL event, a weird event with ddl='# Dum' is consumed before the actual event.
-
-       source is a struct with 14 fields:
-         0 - version string (debezium version)
-         1 - connector string
-         2 - name string (name of the consumer, set when creating the Configuration)
-         3 - server_id int64
-         4 - ts_sec int64
-         5 - gtid string
-         6 - file string
-         7 - pos int64     (there can be multiple events for the same file and position.
-                            Everything in same position seems to be anything done in the same query)
-         8 - row int32     (if multiple rows are involved in the same transaction, this is the row #)
-         9 - snapshot boolean (null is the same as false)
-         10 - thread int64
-         11 - db string
-         12 - table string
-         13 - query string
-
-       For dml, struct contains 5 top level fields:
-         0 - before struct
-         1 - after struct
-         2 - source struct
-         3 - op string (c for create or insert, u for update, d for delete, and r for read)
-                        not sure when 'r' happens, it's not for select queries...
-         4 - ts_ms int64 (this is *not* the timestamp of the event, but the timestamp when Debezium read it)
-       before is a struct representing the row before the operation. It will have a schema matching the table schema
-       after is a struct representing the row after the operation. It will have a schema matching the table schema
-     */
-
-    Tables tables = new Tables();
     ClassLoader oldCL = Thread.currentThread().getContextClassLoader();
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
     try {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
-        .notifying(sourceRecord -> {
-          if (sourceRecord.value() == null) {
-            return;
-          }
-
-          Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
-          String binlogFile = (String) sourceOffset.get("file");
-          long binlogPosition = (Long) sourceOffset.get("pos");
-          Map<String, byte[]> deltaOffset = new HashMap<>(2);
-          deltaOffset.put("file", Bytes.toBytes(binlogFile));
-          deltaOffset.put("pos", Bytes.toBytes(binlogPosition));
-          Offset recordOffset = new Offset(deltaOffset);
-
-          StructuredRecord val = Records.convert((Struct) sourceRecord.value());
-          String ddl = val.get("ddl");
-          if (ddl != null) {
-            ddlParser.getDdlChanges().reset();
-            ddlParser.parse(ddl, tables);
-            ddlParser.getDdlChanges().groupEventsByDatabase((databaseName, events) -> {
-              for (DdlParserListener.Event event : events) {
-                DDLEvent.Builder builder = DDLEvent.builder()
-                  .setDatabase(databaseName)
-                  .setOffset(recordOffset);
-                switch (event.type()) {
-                  case ALTER_TABLE:
-                    DdlParserListener.TableAlteredEvent alteredEvent = (DdlParserListener.TableAlteredEvent) event;
-                    if (alteredEvent.previousTableId() != null) {
-                      builder.setOperation(DDLOperation.RENAME_TABLE)
-                        .setPrevTable(alteredEvent.previousTableId().table());
-                    } else {
-                      builder.setOperation(DDLOperation.ALTER_TABLE);
-                    }
-                    TableId tableId = alteredEvent.tableId();
-                    Table table = tables.forTable(tableId);
-                    emitter.emit(builder.setTable(tableId.table())
-                                   .setSchema(Records.getSchema(table, mySqlValueConverters))
-                                   .setPrimaryKey(table.primaryKeyColumnNames())
-                                   .build());
-                    break;
-                  case DROP_TABLE:
-                    DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
-                    emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
-                                   .setTable(droppedEvent.tableId().table())
-                                   .build());
-                    break;
-                  case CREATE_TABLE:
-                    DdlParserListener.TableCreatedEvent createdEvent = (DdlParserListener.TableCreatedEvent) event;
-                    tableId = createdEvent.tableId();
-                    table = tables.forTable(tableId);
-                    emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
-                                   .setTable(tableId.table())
-                                   .setSchema(Records.getSchema(table, mySqlValueConverters))
-                                   .setPrimaryKey(table.primaryKeyColumnNames())
-                                   .build());
-                    break;
-                  case DROP_DATABASE:
-                    emitter.emit(builder.setOperation(DDLOperation.DROP_DATABASE).build());
-                    break;
-                  case CREATE_DATABASE:
-                    emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
-                    break;
-                  case TRUNCATE_TABLE:
-                    DdlParserListener.TableTruncatedEvent truncatedEvent =
-                      (DdlParserListener.TableTruncatedEvent) event;
-                    emitter.emit(builder.setOperation(DDLOperation.TRUNCATE_TABLE)
-                                   .setTable(truncatedEvent.tableId().table())
-                                   .build());
-                    break;
-                  default:
-                    return;
-                }
-
-              }
-            });
-            return;
-          }
-
-          DMLOperation op;
-          String opStr = val.get("op");
-          if ("c".equals(opStr)) {
-            op = DMLOperation.INSERT;
-          } else if ("u".equals(opStr)) {
-            op = DMLOperation.UPDATE;
-          } else if ("d".equals(opStr)) {
-            op = DMLOperation.DELETE;
-          } else {
-            LOG.warn("Skipping unknown operation type '{}'", opStr);
-            return;
-          }
-          StructuredRecord source = val.get("source");
-          String database = source.get("db");
-          String table = source.get("table");
-          String transactionId = source.get("gtid");
-          if (transactionId == null) {
-            // this is not really a transaction id, but we don't get an event when a transaction started/ended
-            transactionId = String.format("%s:%d", source.get("file"), source.get("pos"));
-          }
-
-          StructuredRecord before = val.get("before");
-          StructuredRecord after = val.get("after");
-          Long ingestTime = val.get("ts_ms");
-          // TODO: [CDAP-16294] set up snapshot state for MySQL Source
-          DMLEvent.Builder builder = DMLEvent.builder()
-            .setOffset(recordOffset)
-            .setOperation(op)
-            .setDatabase(database)
-            .setTable(table)
-            .setTransactionId(transactionId)
-            .setIngestTimestamp(ingestTime);
-          if (op == DMLOperation.DELETE) {
-            emitter.emit(builder.setRow(before).build());
-          } else {
-            emitter.emit(builder.setRow(after).build());
-          }
-        })
+        .notifying(new MySqlRecordConsumer(context, emitter, ddlParser, mySqlValueConverters, new Tables()))
         .using(new NotifyingCompletionCallback(context))
         .build();
       executorService.submit(engine);
