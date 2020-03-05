@@ -37,4 +37,9 @@
   <suppress checks=".*" files=".*[/\\]LocalJobRunnerWithFix.java" />
   <suppress checks=".*" files=".*[/\\]org[/\\]apache[/\\]hadoop[/\\]util[/\\]Shell.java" />
 
+  <!-- Do not delete, intentionally suppress the 'MethodName' and 'StaticVariableName' checks
+    for MySqlConnectorConfig.java file, because we do not want to change the static method and variable name -->
+  <suppress checks="MethodNameCheck" files="MySqlConnectorConfig.java" />
+  <suppress checks="StaticVariableNameCheck" files="MySqlConnectorConfig.java" />
+
 </suppressions>

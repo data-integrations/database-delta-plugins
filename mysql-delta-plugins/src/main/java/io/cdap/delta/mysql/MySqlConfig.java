@@ -94,4 +94,8 @@ public class MySqlConfig extends PluginConfig {
   public String getJdbcPluginName() {
     return jdbcPluginName;
   }
+
+  public String getJDBCPluginId() {
+    return String.format("%s.%s.%s", "mysqlsource", "jbdc", jdbcPluginName);
+  }
 }

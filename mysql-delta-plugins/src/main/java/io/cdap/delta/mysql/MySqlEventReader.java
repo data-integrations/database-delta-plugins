@@ -26,8 +26,10 @@ import io.cdap.delta.common.NotifyingCompletionCallback;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
+import io.debezium.connector.mysql.MySqlJdbcContext;
 import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.embedded.EmbeddedEngine;
+import io.debezium.jdbc.JdbcConnection;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.jdbc.TemporalPrecisionMode;
 import io.debezium.relational.Tables;
@@ -35,6 +37,7 @@ import io.debezium.relational.ddl.DdlParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Driver;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
@@ -68,6 +71,16 @@ public class MySqlEventReader implements EventReader {
 
   @Override
   public void start(Offset offset) {
+    // load mysql jdbc driver into class loader here and use this loaded jdbc class and class loader to set static
+    // variable 'connectionFactory' in MySqlJdbcContext and static variable 'jdbcClassLoader' in MySqlValueConverters.
+    // so far, this is a needed hacky solution for us to solve the problem of not packing mysql-jdbc jar for MySql
+    // delta plugin in CDAP.
+    Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
+    MySqlJdbcContext.connectionFactory = JdbcConnection.patternBasedFactory(MySqlJdbcContext.MYSQL_CONNECTION_URL,
+                                                                            jdbcDriverClass.getName(),
+                                                                            jdbcDriverClass.getClassLoader());
+    MySqlValueConverters.jdbcClassLoader = jdbcDriverClass.getClassLoader();
+
     // For MySQL, the unique table identifier in debezium is 'databaseName.tableName'
     Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
       Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
