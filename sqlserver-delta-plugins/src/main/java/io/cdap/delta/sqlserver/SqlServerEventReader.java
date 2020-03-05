@@ -24,9 +24,13 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.common.DBSchemaHistory;
 import io.cdap.delta.common.NotifyingCompletionCallback;
 import io.debezium.config.Configuration;
+import io.debezium.connector.sqlserver.SqlServerConnection;
 import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.embedded.EmbeddedEngine;
+import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.jdbc.JdbcConnection;
 
+import java.sql.Driver;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -56,6 +60,15 @@ public class SqlServerEventReader implements EventReader {
 
   @Override
   public void start(Offset offset) {
+    // load sql server jdbc driver into class loader and use this loaded jdbc class to set the static factory
+    // variable in SqlServerConnection for instantiation purpose later on.
+    Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
+    String urlPattern = "jdbc:sqlserver://${" + JdbcConfiguration.HOSTNAME + "}:${" +
+      JdbcConfiguration.PORT + "};databaseName=${" + JdbcConfiguration.DATABASE + "}";
+    SqlServerConnection.factory = JdbcConnection.patternBasedFactory(urlPattern,
+                                                                     jdbcDriverClass.getName(),
+                                                                     jdbcDriverClass.getClassLoader());
+
     // this is needed since sql server does not return the database information in the record
     String databaseName = config.getDatabase();
 

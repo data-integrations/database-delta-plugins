@@ -87,4 +87,8 @@ public class SqlServerConfig extends PluginConfig {
   public String getServerTimezone() {
     return serverTimezone == null || serverTimezone.isEmpty() ? "UTC" : serverTimezone;
   }
+
+  public String getJDBCPluginId() {
+    return String.format("%s.%s.%s", "sqlserversource", "jbdc", jdbcPluginName);
+  }
 }

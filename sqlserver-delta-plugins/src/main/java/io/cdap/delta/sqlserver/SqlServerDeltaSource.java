@@ -47,10 +47,11 @@ public class SqlServerDeltaSource implements DeltaSource {
     this.config = config;
   }
 
-
   @Override
   public void configure(Configurer configurer) {
-
+    // add Sql-Server JDBC Plugin usage
+    configurer.usePluginClass("jdbc", config.getJdbcPluginName(), config.getJDBCPluginId(),
+                              PluginProperties.builder().build());
   }
 
   @Override
@@ -61,7 +62,7 @@ public class SqlServerDeltaSource implements DeltaSource {
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
     Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", config.getJdbcPluginName(),
-                                                                        getJDBCPluginId(),
+                                                                        config.getJDBCPluginId(),
                                                                         PluginProperties.builder().build());
     if (jdbcDriverClass == null) {
       throw new IllegalArgumentException("JDBC plugin " + config.getJdbcPluginName() + " not found.");
@@ -78,9 +79,5 @@ public class SqlServerDeltaSource implements DeltaSource {
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
     return new SqlServerTableAssessor();
-  }
-
-  private String getJDBCPluginId() {
-    return String.format("%s.%s.%s", "sqlserversource", "jbdc", config.getJdbcPluginName());
   }
 }
