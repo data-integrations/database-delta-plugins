@@ -1,0 +1,16 @@
+Database Plugins for CDAP Delta Application
+
+To run integration tests:
+
+mvn clean verify
+
+This will start a docker container running SQLServer and run integration
+tests against it.
+
+To debug integration tests:
+
+mvn clean verify -Dmaven.failsafe.debug
+
+this will cause maven to stop and wait for you to attach a remote debugger
+to localhost on port 5005 before moving on and running the actual tests.
+
