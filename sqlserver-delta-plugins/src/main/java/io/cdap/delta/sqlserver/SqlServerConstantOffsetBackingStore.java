@@ -70,12 +70,12 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     data.put(ByteBuffer.wrap(Bytes.toBytes(KEY)), ByteBuffer.wrap(offsetBytes));
   }
 
-  static Map<String, String> deserializeOffsets(Map<String, byte[]> offsets) {
+  static Map<String, String> deserializeOffsets(Map<String, String> offsets) {
     Map<String, String> offsetConfig = new HashMap<>();
-    String changeLsn = Bytes.toString(offsets.getOrDefault(SourceInfo.CHANGE_LSN_KEY, null));
-    String commitLsn = Bytes.toString(offsets.getOrDefault(SourceInfo.COMMIT_LSN_KEY, null));
-    String snapshot = Bytes.toString(offsets.getOrDefault(SourceInfo.SNAPSHOT_KEY, null));
-    String snapshotCompleted = Bytes.toString(offsets.getOrDefault(SNAPSHOT_COMPLETED, null));
+    String changeLsn = offsets.getOrDefault(SourceInfo.CHANGE_LSN_KEY, null);
+    String commitLsn = offsets.getOrDefault(SourceInfo.COMMIT_LSN_KEY, null);
+    String snapshot = offsets.getOrDefault(SourceInfo.SNAPSHOT_KEY, null);
+    String snapshotCompleted = offsets.getOrDefault(SNAPSHOT_COMPLETED, null);
     // this is prevent NPE since the configuration does not allow putting null value,
     // also WorkerConfig.get() will throw Exception if a configuration is not found, so have to put some value in it
     offsetConfig.put(SourceInfo.CHANGE_LSN_KEY, changeLsn == null ? "" : changeLsn);
@@ -85,24 +85,24 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     return offsetConfig;
   }
 
-  static Map<String, byte[]> serializeOffsets(SourceRecord sourceRecord) {
+  static Map<String, String> serializeOffsets(SourceRecord sourceRecord) {
     Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
     String changLsn = (String) sourceOffset.get(SourceInfo.CHANGE_LSN_KEY);
     String commitLsn = (String) sourceOffset.get(SourceInfo.COMMIT_LSN_KEY);
     Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
     Boolean snapshotCompleted = (Boolean) sourceOffset.get(SNAPSHOT_COMPLETED);
-    Map<String, byte[]> deltaOffset = new HashMap<>(4);
+    Map<String, String> deltaOffset = new HashMap<>(4);
     if (changLsn != null) {
-      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, Bytes.toBytes(changLsn));
+      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, changLsn);
     }
     if (commitLsn != null) {
-      deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, Bytes.toBytes(commitLsn));
+      deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, commitLsn);
     }
     if (snapshot != null) {
-      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, Bytes.toBytes(snapshot.toString()));
+      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, String.valueOf(snapshot));
     }
     if (snapshotCompleted != null) {
-      deltaOffset.put(SNAPSHOT_COMPLETED, Bytes.toBytes(snapshotCompleted.toString()));
+      deltaOffset.put(SNAPSHOT_COMPLETED, String.valueOf(snapshotCompleted));
     }
     return deltaOffset;
   }

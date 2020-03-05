@@ -76,7 +76,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, byte[]> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
+    Map<String, String> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));

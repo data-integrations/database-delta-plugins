@@ -16,7 +16,6 @@
 
 package io.cdap.delta.mysql;
 
-import io.cdap.cdap.api.common.Bytes;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.delta.api.DDLEvent;
 import io.cdap.delta.api.DDLOperation;
@@ -115,9 +114,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
     String binlogFile = (String) sourceOffset.get("file");
     long binlogPosition = (Long) sourceOffset.get("pos");
-    Map<String, byte[]> deltaOffset = new HashMap<>(2);
-    deltaOffset.put("file", Bytes.toBytes(binlogFile));
-    deltaOffset.put("pos", Bytes.toBytes(binlogPosition));
+    Map<String, String> deltaOffset = new HashMap<>(2);
+    deltaOffset.put("file", binlogFile);
+    deltaOffset.put("pos", String.valueOf(binlogPosition));
     Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
