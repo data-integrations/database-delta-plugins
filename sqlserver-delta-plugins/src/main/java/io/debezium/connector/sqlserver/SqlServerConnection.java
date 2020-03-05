@@ -48,6 +48,7 @@ public class SqlServerConnection extends JdbcConnection {
   private static final String GET_LIST_OF_KEY_COLUMNS = "SELECT * FROM cdc.index_columns WHERE object_id=?";
   private static final int CHANGE_TABLE_DATA_COLUMN_OFFSET = 5;
 
+  // Note: this line is the only change from the original file
   public static ConnectionFactory factory;
 
   /**
