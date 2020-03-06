@@ -42,8 +42,8 @@ public class MySqlJdbcContext implements AutoCloseable {
     "SHOW VARIABLES WHERE Variable_name IN ('character_set_server','collation_server')";
   private static final String SQL_SHOW_SESSION_VARIABLE_SSL_VERSION = "SHOW SESSION STATUS LIKE 'Ssl_version'";
 
-  // This is a change compared with the original file, we intentionally make the 'connectionFactor' a public static
-  // variable, so that we can set the value in CDAP MySql event reader side.
+  // This is a change from the original file, we intentionally make the 'connectionFactor' a public static
+  // variable, so that we can set the value in CDAP side.
   public static ConnectionFactory connectionFactory;
 
   protected final Logger logger = LoggerFactory.getLogger(getClass());

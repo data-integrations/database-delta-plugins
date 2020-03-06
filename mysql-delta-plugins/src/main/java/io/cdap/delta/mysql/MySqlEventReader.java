@@ -73,8 +73,8 @@ public class MySqlEventReader implements EventReader {
   public void start(Offset offset) {
     // load mysql jdbc driver into class loader here and use this loaded jdbc class and class loader to set static
     // variable 'connectionFactory' in MySqlJdbcContext and static variable 'jdbcClassLoader' in MySqlValueConverters.
-    // so far, this is a needed hacky solution for us to solve the problem of not packing mysql-jdbc jar for MySql
-    // delta plugin in CDAP.
+    // note that, this is a short-term hacky solution for us to solve the problem of excluding mysql-jdbc jar from MySql
+    // delta plugin's dependencies in CDAP.
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
     MySqlJdbcContext.connectionFactory = JdbcConnection.patternBasedFactory(MySqlJdbcContext.MYSQL_CONNECTION_URL,
                                                                             jdbcDriverClass.getName(),
