@@ -2,10 +2,10 @@
   "metadata": {
     "spec-version": "1.5"
   },
-  "display-name": "SqlServer",
+  "display-name": "Microsoft SQLServer",
   "configuration-groups": [
     {
-      "label": "Connection Info",
+      "label": "Basic",
       "properties": [
         {
           "name": "host",
@@ -19,18 +19,18 @@
         },
         {
           "name": "database",
-          "label": "database",
+          "label": "Database",
           "widget-type": "textbox"
         },
         {
-          "name": "serverTimezone",
-          "label": "Server Timezone",
+          "name": "jdbcPluginName",
+          "label": "JDBC Plugin Name",
           "widget-type": "textbox"
         }
       ]
     },
     {
-      "label": "User Account",
+      "label": "Credentials",
       "properties": [
         {
           "name": "user",
@@ -41,6 +41,16 @@
           "name": "password",
           "label": "Password",
           "widget-type": "password"
+        }
+      ]
+    },
+    {
+      "label": "Advanced",
+      "properties": [
+        {
+          "name": "serverTimezone",
+          "label": "Server Timezone",
+          "widget-type": "textbox"
         }
       ]
     }
