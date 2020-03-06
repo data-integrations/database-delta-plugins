@@ -17,11 +17,12 @@
 package io.cdap.delta.mysql;
 
 import com.google.gson.Gson;
-import io.cdap.cdap.api.common.Bytes;
+import io.debezium.util.Strings;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.MemoryOffsetBackingStore;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,38 +30,42 @@ import java.util.Map;
  * Returns an offset based on a configuration setting and doesn't actually store anything.
  * This is because the Delta app needs to have control over when offsets are stored and not Debezium.
  *
- *
  * OffsetBackingStore is pretty weird... keys are ByteBuffer representations of Strings like:
- *
  * {"schema":null,"payload":["delta",{"server":"dummy"}]}
  *
- * and keys are ByteBuffer representations of Strings like:
- *
- * {"file":"mysql-bin.000003","pos":16838027,"row":1,"server_id":223344,"event":2,"ts_sec":1234567890}
+ * and values will contain following items: 1. file; 2. pos; 3. snapshot.
  */
 public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
+  static final String FILE = "file";
+  static final String POS = "pos";
+  static final String SNAPSHOT = "snapshot";
   private static final Gson GSON = new Gson();
-  private static final String KEY = "{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}";
+  // The key is hardcoded here
+  private static final ByteBuffer KEY =
+    StandardCharsets.UTF_8.encode("{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}");
 
   @Override
   public void configure(WorkerConfig config) {
-    String offsetStr = config.getString("offset.storage.file.filename");
-    if ("|".equals(offsetStr) || offsetStr.isEmpty()) {
-      return;
-    }
+    Map<String, String> originalConfig = config.originalsStrings();
+    String fileStr = originalConfig.get(FILE);
+    String posStr = originalConfig.get(POS);
+    String snapshotStr = originalConfig.get(SNAPSHOT);
 
-    String[] offsetParts = offsetStr.split("\\|");
-    String posStr = offsetParts[0];
-    String fileStr = offsetParts[1];
-
-    if (posStr.isEmpty() || fileStr.isEmpty()) {
-      return;
-    }
     Map<String, Object> offset = new HashMap<>();
-    offset.put("file", fileStr);
-    offset.put("pos", Long.parseLong(posStr));
-    byte[] offsetBytes = Bytes.toBytes(GSON.toJson(offset));
+    if (!Strings.isNullOrEmpty(fileStr)) {
+      offset.put(FILE, fileStr);
+    }
+    if (!Strings.isNullOrEmpty(posStr)) {
+      offset.put(POS, Long.valueOf(posStr));
+    }
+    if (!Strings.isNullOrEmpty(snapshotStr)) {
+      offset.put(SNAPSHOT, Boolean.valueOf(snapshotStr));
+    }
 
-    data.put(ByteBuffer.wrap(Bytes.toBytes(KEY)), ByteBuffer.wrap(offsetBytes));
+    if (offset.isEmpty()) {
+      return;
+    }
+
+    data.put(KEY, StandardCharsets.UTF_8.encode(GSON.toJson(offset)));
   }
 }

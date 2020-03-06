@@ -84,26 +84,15 @@ public class MySqlEventReader implements EventReader {
     // For MySQL, the unique table identifier in debezium is 'databaseName.tableName'
     Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
       Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
-
-    /*
-        OffsetBackingStore is pretty weird... keys are ByteBuffer representations of Strings like:
-
-        {"schema":null,"payload":["mysql-connector",{"server":"dummy"}]}
-
-        and keys are ByteBuffer representations of Strings like:
-
-        {"file":"mysql-bin.000003","pos":16838027}
-     */
-
-    String fileStr = offset.get().getOrDefault("file", "");
-    String pos = offset.get().getOrDefault("pos", "");
-    // have to pass config to the offset storage implementation through 'offset.storage.file.filename'
-    // since embedded engine only passes a hardcoded set of config properties to the offset store.
+    Map<String, String> state = offset.get(); // state map is always not null
     Configuration debeziumConf = Configuration.create()
       .with("connector.class", MySqlConnector.class.getName())
       .with("offset.storage", MySqlConstantOffsetBackingStore.class.getName())
-      .with("offset.storage.file.filename", pos + "|" + fileStr)
       .with("offset.flush.interval.ms", 1000)
+      /* bind offset configs with debeizumConf */
+      .with("file", state.getOrDefault(MySqlConstantOffsetBackingStore.FILE, ""))
+      .with("pos", state.getOrDefault(MySqlConstantOffsetBackingStore.POS, ""))
+      .with("snapshot", state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, ""))
       /* begin connector properties */
       .with("name", "delta")
       .with("database.hostname", config.getHost())

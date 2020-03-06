@@ -111,16 +111,17 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
-    String binlogFile = (String) sourceOffset.get("file");
-    long binlogPosition = (Long) sourceOffset.get("pos");
-    Map<String, String> deltaOffset = new HashMap<>(2);
-    deltaOffset.put("file", binlogFile);
-    deltaOffset.put("pos", String.valueOf(binlogPosition));
+    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     String ddl = val.get("ddl");
+    StructuredRecord source = val.get("source");
+    if (source == null) {
+      // This should not happen, 'source' is a mandatory field in sourceRecord from debezium
+      return;
+    }
+    boolean isSnapshot = Boolean.TRUE.equals(source.get("snapshot"));
     if (ddl != null) {
       ddlParser.getDdlChanges().reset();
       ddlParser.parse(ddl, tables);
@@ -128,7 +129,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
         for (DdlParserListener.Event event : events) {
           DDLEvent.Builder builder = DDLEvent.builder()
             .setDatabase(databaseName)
-            .setOffset(recordOffset);
+            .setOffset(recordOffset)
+            .setSnapshot(isSnapshot);
           switch (event.type()) {
             case ALTER_TABLE:
               DdlParserListener.TableAlteredEvent alteredEvent = (DdlParserListener.TableAlteredEvent) event;
@@ -177,7 +179,6 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             default:
               return;
           }
-
         }
       });
       return;
@@ -195,26 +196,27 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       LOG.warn("Skipping unknown operation type '{}'", opStr);
       return;
     }
-    StructuredRecord source = val.get("source");
     String database = source.get("db");
     String table = source.get("table");
     String transactionId = source.get("gtid");
     if (transactionId == null) {
       // this is not really a transaction id, but we don't get an event when a transaction started/ended
-      transactionId = String.format("%s:%d", source.get("file"), source.get("pos"));
+      transactionId = String.format("%s:%d",
+                                    source.get(MySqlConstantOffsetBackingStore.FILE),
+                                    source.get(MySqlConstantOffsetBackingStore.POS));
     }
 
     StructuredRecord before = val.get("before");
     StructuredRecord after = val.get("after");
     Long ingestTime = val.get("ts_ms");
-    // TODO: [CDAP-16294] set up snapshot state for MySQL Source
     DMLEvent.Builder builder = DMLEvent.builder()
       .setOffset(recordOffset)
       .setOperation(op)
       .setDatabase(database)
       .setTable(table)
       .setTransactionId(transactionId)
-      .setIngestTimestamp(ingestTime);
+      .setIngestTimestamp(ingestTime)
+      .setSnapshot(isSnapshot);
 
     // It is required for the source to provide the previous row if the dml operation is 'UPDATE'
     if (op == DMLOperation.UPDATE) {
@@ -224,5 +226,35 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     } else {
       emitter.emit(builder.setRow(after).build());
     }
+  }
+
+  // This method is used for generating a cdap offsets from debezium sourceRecord.
+  private Map<String, String> generateCdapOffsets(SourceRecord sourceRecord) {
+    Map<String, String> deltaOffset = new HashMap<>();
+    Struct value = (Struct) sourceRecord.value();
+    if (value == null) { // safety check to avoid NPE
+      return deltaOffset;
+    }
+
+    Struct source = (Struct) value.get("source");
+    if (source == null) { // safety check to avoid NPE
+      return deltaOffset;
+    }
+
+    String binlogFile = (String) source.get(MySqlConstantOffsetBackingStore.FILE);
+    Long binlogPosition = (Long) source.get(MySqlConstantOffsetBackingStore.POS);
+    Boolean snapshot = (Boolean) source.get(MySqlConstantOffsetBackingStore.SNAPSHOT);
+
+    if (binlogFile != null) {
+      deltaOffset.put(MySqlConstantOffsetBackingStore.FILE, binlogFile);
+    }
+    if (binlogPosition != null) {
+      deltaOffset.put(MySqlConstantOffsetBackingStore.POS, String.valueOf(binlogPosition));
+    }
+    if (snapshot != null) {
+      deltaOffset.put(MySqlConstantOffsetBackingStore.SNAPSHOT, String.valueOf(snapshot));
+    }
+
+    return deltaOffset;
   }
 }
