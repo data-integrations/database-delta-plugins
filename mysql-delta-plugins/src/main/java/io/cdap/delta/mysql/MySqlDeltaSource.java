@@ -49,7 +49,9 @@ public class MySqlDeltaSource implements DeltaSource {
 
   @Override
   public void configure(Configurer configurer) {
-    // no-op
+    // add MySql JDBC Plugin usage at configure time
+    configurer.usePluginClass("jdbc", conf.getJdbcPluginName(), conf.getJDBCPluginId(),
+                              PluginProperties.builder().build());
   }
 
   @Override
@@ -62,7 +64,7 @@ public class MySqlDeltaSource implements DeltaSource {
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
     Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
-                                                                        "targetDriver",
+                                                                        conf.getJDBCPluginId(),
                                                                         PluginProperties.builder().build());
     if (jdbcDriverClass == null) {
       throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
