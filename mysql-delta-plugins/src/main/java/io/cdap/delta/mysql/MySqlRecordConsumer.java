@@ -215,7 +215,11 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       .setTable(table)
       .setTransactionId(transactionId)
       .setIngestTimestamp(ingestTime);
-    if (op == DMLOperation.DELETE) {
+
+    // It is required for the source to provide the previous row if the dml operation is 'UPDATE'
+    if (op == DMLOperation.UPDATE) {
+      emitter.emit(builder.setPreviousRow(before).setRow(after).build());
+    } else if (op == DMLOperation.DELETE) {
       emitter.emit(builder.setRow(before).build());
     } else {
       emitter.emit(builder.setRow(after).build());
