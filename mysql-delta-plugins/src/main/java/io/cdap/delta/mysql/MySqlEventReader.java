@@ -16,7 +16,6 @@
 
 package io.cdap.delta.mysql;
 
-import io.cdap.cdap.api.common.Bytes;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -83,9 +82,8 @@ public class MySqlEventReader implements EventReader {
         {"file":"mysql-bin.000003","pos":16838027}
      */
 
-    String fileStr = Bytes.toString(offset.get().getOrDefault("file", Bytes.toBytes("")));
-    byte[] posBytes = offset.get().get("pos");
-    String pos = posBytes == null ? "" : Long.toString(Bytes.toLong(posBytes));
+    String fileStr = offset.get().getOrDefault("file", "");
+    String pos = offset.get().getOrDefault("pos", "");
     // have to pass config to the offset storage implementation through 'offset.storage.file.filename'
     // since embedded engine only passes a hardcoded set of config properties to the offset store.
     Configuration debeziumConf = Configuration.create()
