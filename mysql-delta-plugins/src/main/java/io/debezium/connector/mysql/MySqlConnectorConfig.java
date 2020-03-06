@@ -745,8 +745,10 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withDependents(DATABASE_WHITELIST_NAME)
     .withDescription("Flag specifying whether built-in tables should be ignored.");
 
-  // This is the only changed from the original file.
-  // We basically just delete the usage of 'com.mysql.cj.jdbc.Driver' class
+  /**
+   * ===================== This is a diff from the original file ===========================
+   * We basically just delete the usage of 'com.mysql.cj.jdbc.Driver' class.
+   */
   public static final Field JDBC_DRIVER = Field.create("database.jdbc.driver")
     .withDisplayName("Jdbc Driver Class Name")
     .withType(Type.CLASS)

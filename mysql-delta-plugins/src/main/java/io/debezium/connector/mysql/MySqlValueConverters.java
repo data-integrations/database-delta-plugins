@@ -65,9 +65,12 @@ public class MySqlValueConverters extends JdbcValueConverters {
    */
   private static final Pattern TIME_FIELD_PATTERN = Pattern.compile("(\\-?[0-9]*):([0-9]*):([0-9]*)(\\.([0-9]*))?");
 
-  // This is a change from the original file. It's a hacky way for us to intentionally pass in the jdbc class loader
-  // to load 'com.mysql.cj.CharsetMapping' class so that we can invoke the 'getJavaEncodingForMysqlCharset' static
-  // method.
+  /**
+   * ===================== This is a diff from the original file ===========================
+   * It's a hacky way for us to intentionally pass in the jdbc class loader to load 'com.mysql.cj.CharsetMapping'
+   * class so that we can invoke the 'getJavaEncodingForMysqlCharset' static method. The usage of this class loader
+   * is in 'charsetFor(Column column) ' method from line 320 to 329.
+   */
   public static ClassLoader jdbcClassLoader;
 
   /**
@@ -313,6 +316,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
       logger.warn("Column is missing a character set: {}", column);
       return null;
     }
+
+    // This is a change from the original file, we are using the jdbcClassLoader to invoke the static method.
     String encoding;
     try {
       encoding = (String) jdbcClassLoader.loadClass("com.mysql.cj.CharsetMapping")
