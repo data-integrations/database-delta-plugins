@@ -27,6 +27,13 @@
 
   <artifactId>sqlserver-delta-plugins</artifactId>
 
+  <properties>
+    <port.file>${project.build.outputDirectory}/port.properties</port.file>
+    <properties.file>${project.build.outputDirectory}/pom.properties</properties.file>
+    <sqlserver.image>mcr.microsoft.com/mssql/server:2017-CU19-ubuntu-16.04</sqlserver.image>
+    <sqlserver.password>D3ltaPass</sqlserver.password>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.debezium</groupId>
@@ -44,6 +51,12 @@
       <artifactId>delta-plugins-common</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>com.microsoft.sqlserver</groupId>
+      <artifactId>mssql-jdbc</artifactId>
+      <version>8.2.1.jre8</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -51,8 +64,6 @@
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>3.5.1</version>
-        <extensions>true</extensions>
         <configuration>
           <instructions>
             <_exportcontents>io.cdap.delta.sqlserver.*</_exportcontents>
@@ -61,15 +72,59 @@
             <Embed-Directory>lib</Embed-Directory>
           </instructions>
         </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>io.fabric8</groupId>
+        <artifactId>docker-maven-plugin</artifactId>
+        <version>0.33.0</version>
+        <configuration>
+          <images>
+            <image>
+              <name>${sqlserver.image}</name>
+              <run>
+                <env>
+                  <ACCEPT_EULA>Y</ACCEPT_EULA>
+                  <SA_PASSWORD>${sqlserver.password}</SA_PASSWORD>
+                </env>
+                <ports>
+                  <port>sqlserver.port:1433</port>
+                </ports>
+                <portPropertyFile>
+                  ${port.file}
+                </portPropertyFile>
+                <wait>
+                  <log>SQL Server is now ready for client connections</log>
+                  <time>30000</time>
+                </wait>
+              </run>
+            </image>
+          </images>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>properties-maven-plugin</artifactId>
+        <version>1.0.0</version>
         <executions>
           <execution>
-            <phase>package</phase>
+            <phase>generate-resources</phase>
             <goals>
-              <goal>bundle</goal>
+              <goal>write-project-properties</goal>
             </goals>
+            <configuration>
+              <outputFile>${properties.file}</outputFile>
+            </configuration>
           </execution>
         </executions>
       </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+      </plugin>
+
       <plugin>
         <groupId>io.cdap</groupId>
         <artifactId>cdap-maven-plugin</artifactId>

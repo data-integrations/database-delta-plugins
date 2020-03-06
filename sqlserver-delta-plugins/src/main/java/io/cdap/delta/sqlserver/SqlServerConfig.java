@@ -26,6 +26,7 @@ import javax.annotation.Nullable;
  * Plugin configuration for the SqlServer source.
  */
 public class SqlServerConfig extends PluginConfig {
+
   @Description("Hostname of the SqlServer to read from.")
   private String host;
 
