@@ -121,7 +121,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       // This should not happen, 'source' is a mandatory field in sourceRecord from debezium
       return;
     }
-    boolean isSnapshot = Boolean.TRUE.equals(source.get("snapshot"));
+    boolean isSnapshot = Boolean.TRUE.equals(source.get(MySqlConstantOffsetBackingStore.SNAPSHOT));
     if (ddl != null) {
       ddlParser.getDdlChanges().reset();
       ddlParser.parse(ddl, tables);
