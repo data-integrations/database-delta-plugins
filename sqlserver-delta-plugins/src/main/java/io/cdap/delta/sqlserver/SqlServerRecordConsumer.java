@@ -147,6 +147,11 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
 
+      // try to always drop the table before snapshot the schema.
+      emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
+                     .setTable(tableName)
+                     .build());
+
       emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
                      .setTable(tableName)
                      .setSchema(schema)
