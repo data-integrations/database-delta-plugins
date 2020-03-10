@@ -137,7 +137,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             .setDatabase(database)
             .setOffset(recordOffset)
             .setSnapshot(isSnapshot);
-          // since current ddl blacklist implementation is bind with table level, we will only do the dll blacklist
+          // since current ddl blacklist implementation is bind with table level, we will only do the ddl blacklist
           // checking only for table change related ddl event, includes: ALTER_TABLE, RENAME_TABLE, DROP_TABLE,
           // CREATE_TABLE and TRUNCATE_TABLE.
           switch (event.type()) {
@@ -154,8 +154,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
                 ddlOp = DDLOperation.ALTER_TABLE;
               }
 
-              if (!sourceTableNotValid(readAllTables, sourceTable) &&
-                !isDDLOperationBlacklisted(readAllTables, sourceTable, ddlOp)) {
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, ddlOp)) {
                 emitter.emit(builder.setOperation(ddlOp)
                                .setTable(tableId.table())
                                .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
@@ -167,8 +166,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             case DROP_TABLE:
               DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
               sourceTable = getSourceTable(database, droppedEvent.tableId().table());
-              if (!sourceTableNotValid(readAllTables, sourceTable) &&
-                !isDDLOperationBlacklisted(readAllTables, sourceTable, DDLOperation.DROP_TABLE)) {
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.DROP_TABLE)) {
                 emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
                                .setTable(droppedEvent.tableId().table())
                                .build());
@@ -179,8 +177,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
               tableId = createdEvent.tableId();
               table = tables.forTable(tableId);
               sourceTable = getSourceTable(database, tableId.table());
-              if (!sourceTableNotValid(readAllTables, sourceTable) &&
-                !isDDLOperationBlacklisted(readAllTables, sourceTable, DDLOperation.CREATE_TABLE)) {
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.CREATE_TABLE)) {
                 emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
                                .setTable(tableId.table())
                                .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
@@ -199,8 +196,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
               DdlParserListener.TableTruncatedEvent truncatedEvent =
                 (DdlParserListener.TableTruncatedEvent) event;
               sourceTable = getSourceTable(database, truncatedEvent.tableId().table());
-              if (!sourceTableNotValid(readAllTables, sourceTable) &&
-                !isDDLOperationBlacklisted(readAllTables, sourceTable, DDLOperation.TRUNCATE_TABLE)) {
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.TRUNCATE_TABLE)) {
                 emitter.emit(builder.setOperation(DDLOperation.TRUNCATE_TABLE)
                                .setTable(truncatedEvent.tableId().table())
                                .build());
@@ -276,6 +272,11 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     } else {
       emitter.emit(builder.setRow(after).build());
     }
+  }
+
+  private boolean shouldEmitDdlEventForOperation(boolean readAllTables, SourceTable sourceTable, DDLOperation op) {
+    return (!sourceTableNotValid(readAllTables, sourceTable)) &&
+      (!isDDLOperationBlacklisted(readAllTables, sourceTable, op));
   }
 
   private boolean isDDLOperationBlacklisted(boolean readAllTables, SourceTable sourceTable, DDLOperation op) {
