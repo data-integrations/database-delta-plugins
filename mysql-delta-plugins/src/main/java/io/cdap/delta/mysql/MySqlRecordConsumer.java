@@ -138,25 +138,31 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             .setOffset(recordOffset)
             .setSnapshot(isSnapshot);
           // since current ddl blacklist implementation is bind with table level, we will only do the dll blacklist
-          // checking only for table change related ddl event(ALTER_TABLE/DROP_TABLE/CREATE_TABLE/TRUNCATE_TABLE).
+          // checking only for table change related ddl event, includes: ALTER_TABLE, RENAME_TABLE, DROP_TABLE,
+          // CREATE_TABLE and TRUNCATE_TABLE.
           switch (event.type()) {
             case ALTER_TABLE:
               DdlParserListener.TableAlteredEvent alteredEvent = (DdlParserListener.TableAlteredEvent) event;
               TableId tableId = alteredEvent.tableId();
               Table table = tables.forTable(tableId);
               SourceTable sourceTable = getSourceTable(database, tableId.table());
-
+              DDLOperation ddlOp;
               if (alteredEvent.previousTableId() != null) {
-                builder.setOperation(DDLOperation.RENAME_TABLE)
-                  .setPrevTable(alteredEvent.previousTableId().table());
+                ddlOp = DDLOperation.RENAME_TABLE;
+                builder.setPrevTable(alteredEvent.previousTableId().table());
               } else {
-                builder.setOperation(DDLOperation.ALTER_TABLE);
+                ddlOp = DDLOperation.ALTER_TABLE;
               }
-              emitter.emit(builder.setTable(tableId.table())
-                             .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
-                                          Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
-                             .setPrimaryKey(table.primaryKeyColumnNames())
-                             .build());
+
+              if (!sourceTableNotValid(readAllTables, sourceTable) &&
+                !isDDLOperationBlacklisted(readAllTables, sourceTable, ddlOp)) {
+                emitter.emit(builder.setOperation(ddlOp)
+                               .setTable(tableId.table())
+                               .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
+                                            Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
+                               .setPrimaryKey(table.primaryKeyColumnNames())
+                               .build());
+              }
               break;
             case DROP_TABLE:
               DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
