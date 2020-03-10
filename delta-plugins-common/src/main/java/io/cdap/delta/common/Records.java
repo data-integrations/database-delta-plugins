@@ -62,6 +62,30 @@ public class Records {
   }
 
   /**
+   * Return the schema of a table.
+   *
+   * @param table
+   * @param converters
+   * @param columns
+   * @return
+   */
+  public static Schema getSchema(Table table, JdbcValueConverters converters, Set<SourceColumn> columns) {
+    // If columns set is empty, it means user wants to have all the columns by default.
+    if (columns.isEmpty()) {
+      return getSchema(table, converters);
+    }
+
+    List<Schema.Field> fields = new ArrayList<>(columns.size());
+    for (SourceColumn column : columns) {
+      String columnName = column.getName();
+      fields.add(Schema.Field.of(columnName,
+                                 convert(converters.schemaBuilder(table.columnWithName(columnName)).build())));
+    }
+
+    return Schema.recordOf(table.id().table(), fields);
+  }
+
+  /**
    * Return a new structured record which will only contain selected columns for the table.
    *
    * @param record

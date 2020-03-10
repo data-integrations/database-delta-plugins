@@ -118,7 +118,8 @@ public class MySqlEventReader implements EventReader {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
-        .notifying(new MySqlRecordConsumer(context, emitter, ddlParser, mySqlValueConverters, new Tables()))
+        .notifying(new MySqlRecordConsumer(context, emitter, ddlParser, mySqlValueConverters,
+                                           new Tables(), sourceTableMap))
         .using(new NotifyingCompletionCallback(context))
         .build();
       executorService.submit(engine);

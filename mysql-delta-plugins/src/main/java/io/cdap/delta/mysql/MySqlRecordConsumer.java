@@ -24,6 +24,7 @@ import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
+import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.common.Records;
 import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.relational.Table;
@@ -52,15 +53,17 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final DdlParser ddlParser;
   private final MySqlValueConverters mySqlValueConverters;
   private final Tables tables;
+  private final Map<String, SourceTable> sourceTableMap;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
                              DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
-                             Tables tables) {
+                             Tables tables, Map<String, SourceTable> sourceTableMap) {
     this.context = context;
     this.emitter = emitter;
     this.ddlParser = ddlParser;
     this.mySqlValueConverters = mySqlValueConverters;
     this.tables = tables;
+    this.sourceTableMap = sourceTableMap;
   }
 
   @Override
@@ -122,46 +125,66 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
     boolean isSnapshot = Boolean.TRUE.equals(source.get(MySqlConstantOffsetBackingStore.SNAPSHOT));
+    // If the map is empty, we should read all DDL/DML events and columns of all tables
+    boolean readAllTables = sourceTableMap.isEmpty();
+
     if (ddl != null) {
       ddlParser.getDdlChanges().reset();
       ddlParser.parse(ddl, tables);
-      ddlParser.getDdlChanges().groupEventsByDatabase((databaseName, events) -> {
+      ddlParser.getDdlChanges().groupEventsByDatabase((database, events) -> {
         for (DdlParserListener.Event event : events) {
           DDLEvent.Builder builder = DDLEvent.builder()
-            .setDatabase(databaseName)
+            .setDatabase(database)
             .setOffset(recordOffset)
             .setSnapshot(isSnapshot);
+          // since current ddl blacklist implementation is bind with table level, we will only do the ddl blacklist
+          // checking only for table change related ddl event, includes: ALTER_TABLE, RENAME_TABLE, DROP_TABLE,
+          // CREATE_TABLE and TRUNCATE_TABLE.
           switch (event.type()) {
             case ALTER_TABLE:
               DdlParserListener.TableAlteredEvent alteredEvent = (DdlParserListener.TableAlteredEvent) event;
-              if (alteredEvent.previousTableId() != null) {
-                builder.setOperation(DDLOperation.RENAME_TABLE)
-                  .setPrevTable(alteredEvent.previousTableId().table());
-              } else {
-                builder.setOperation(DDLOperation.ALTER_TABLE);
-              }
               TableId tableId = alteredEvent.tableId();
               Table table = tables.forTable(tableId);
-              emitter.emit(builder.setTable(tableId.table())
-                             .setSchema(Records.getSchema(table, mySqlValueConverters))
-                             .setPrimaryKey(table.primaryKeyColumnNames())
-                             .build());
+              SourceTable sourceTable = getSourceTable(database, tableId.table());
+              DDLOperation ddlOp;
+              if (alteredEvent.previousTableId() != null) {
+                ddlOp = DDLOperation.RENAME_TABLE;
+                builder.setPrevTable(alteredEvent.previousTableId().table());
+              } else {
+                ddlOp = DDLOperation.ALTER_TABLE;
+              }
+
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, ddlOp)) {
+                emitter.emit(builder.setOperation(ddlOp)
+                               .setTable(tableId.table())
+                               .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
+                                            Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
+                               .setPrimaryKey(table.primaryKeyColumnNames())
+                               .build());
+              }
               break;
             case DROP_TABLE:
               DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
-              emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
-                             .setTable(droppedEvent.tableId().table())
-                             .build());
+              sourceTable = getSourceTable(database, droppedEvent.tableId().table());
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.DROP_TABLE)) {
+                emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
+                               .setTable(droppedEvent.tableId().table())
+                               .build());
+              }
               break;
             case CREATE_TABLE:
               DdlParserListener.TableCreatedEvent createdEvent = (DdlParserListener.TableCreatedEvent) event;
               tableId = createdEvent.tableId();
               table = tables.forTable(tableId);
-              emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
-                             .setTable(tableId.table())
-                             .setSchema(Records.getSchema(table, mySqlValueConverters))
-                             .setPrimaryKey(table.primaryKeyColumnNames())
-                             .build());
+              sourceTable = getSourceTable(database, tableId.table());
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.CREATE_TABLE)) {
+                emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
+                               .setTable(tableId.table())
+                               .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
+                                            Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
+                               .setPrimaryKey(table.primaryKeyColumnNames())
+                               .build());
+              }
               break;
             case DROP_DATABASE:
               emitter.emit(builder.setOperation(DDLOperation.DROP_DATABASE).build());
@@ -172,15 +195,25 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             case TRUNCATE_TABLE:
               DdlParserListener.TableTruncatedEvent truncatedEvent =
                 (DdlParserListener.TableTruncatedEvent) event;
-              emitter.emit(builder.setOperation(DDLOperation.TRUNCATE_TABLE)
-                             .setTable(truncatedEvent.tableId().table())
-                             .build());
+              sourceTable = getSourceTable(database, truncatedEvent.tableId().table());
+              if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.TRUNCATE_TABLE)) {
+                emitter.emit(builder.setOperation(DDLOperation.TRUNCATE_TABLE)
+                               .setTable(truncatedEvent.tableId().table())
+                               .build());
+              }
               break;
             default:
               return;
           }
         }
       });
+      return;
+    }
+
+    String databaseName = source.get("db");
+    String tableName = source.get("table");
+    SourceTable sourceTable = getSourceTable(databaseName, tableName);
+    if (sourceTableNotValid(readAllTables, sourceTable)) {
       return;
     }
 
@@ -196,8 +229,12 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       LOG.warn("Skipping unknown operation type '{}'", opStr);
       return;
     }
-    String database = source.get("db");
-    String table = source.get("table");
+
+    if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {
+      // do nothing due to it was not set to read all tables and the DML op has been blacklisted for this table
+      return;
+    }
+
     String transactionId = source.get("gtid");
     if (transactionId == null) {
       // this is not really a transaction id, but we don't get an event when a transaction started/ended
@@ -208,12 +245,21 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
     StructuredRecord before = val.get("before");
     StructuredRecord after = val.get("after");
+    if (!readAllTables) {
+      if (before != null) {
+        before = Records.keepSelectedColumns(before, sourceTable.getColumns());
+      }
+      if (after != null) {
+        after = Records.keepSelectedColumns(after, sourceTable.getColumns());
+      }
+    }
+
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder builder = DMLEvent.builder()
       .setOffset(recordOffset)
       .setOperation(op)
-      .setDatabase(database)
-      .setTable(table)
+      .setDatabase(databaseName)
+      .setTable(tableName)
       .setTransactionId(transactionId)
       .setIngestTimestamp(ingestTime)
       .setSnapshot(isSnapshot);
@@ -226,6 +272,27 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     } else {
       emitter.emit(builder.setRow(after).build());
     }
+  }
+
+  private boolean shouldEmitDdlEventForOperation(boolean readAllTables, SourceTable sourceTable, DDLOperation op) {
+    return (!sourceTableNotValid(readAllTables, sourceTable)) &&
+      (!isDDLOperationBlacklisted(readAllTables, sourceTable, op));
+  }
+
+  private boolean isDDLOperationBlacklisted(boolean readAllTables, SourceTable sourceTable, DDLOperation op) {
+    // return true if record consumer was not set to read all table events and the DDL op has been
+    // blacklisted for this table
+    return !readAllTables && sourceTable.getDdlBlacklist().contains(op);
+  }
+
+  private boolean sourceTableNotValid(boolean readAllTables, SourceTable sourceTable) {
+    // this should not happen, in this case, just return the result here and let caller to handle
+    return !readAllTables && sourceTable == null;
+  }
+
+  private SourceTable getSourceTable(String database, String table) {
+    String sourceTableId = database + "." + table;
+    return sourceTableMap.get(sourceTableId);
   }
 
   // This method is used for generating a cdap offsets from debezium sourceRecord.
