@@ -50,7 +50,8 @@ GO
 
 Setting up JDBC Driver
 -----------
-Just need to install the downloaded Microsoft SQL Server JDBC driver from the hub.
+If it is not already installed, instructions for installing the Microsoft SQL Server JDBC driver can be found on the 
+Hub.
 
 Plugin Properties
 -----------

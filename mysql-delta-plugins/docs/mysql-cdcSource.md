@@ -45,7 +45,7 @@ mysql> FLUSH PRIVILEGES;
 
 Setting up JDBC Driver
 -----------
-Just need to install the downloaded MySQL JDBC driver from the hub.
+If it is not already installed, instructions for installing the MySQL JDBC driver can be found on the Hub.
 
 Plugin Properties
 -----------
