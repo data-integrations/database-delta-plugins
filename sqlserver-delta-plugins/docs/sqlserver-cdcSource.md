@@ -61,15 +61,15 @@ Description: This is a jdbc driver for SQL Server.
 
 Plugin Properties
 -----------
-**Host:** Hostname of the MySQL server to read from.
+**Host:** Hostname of the SQL server to read from.
 
-**Port:** Port to use to connect to the MySQL server.
+**Port:** Port to use to connect to the SQL server.
 
-**Server Timezone:** Timezone of the MySQL server. This is used when converting dates into timestamps.
+**Server Timezone:** Timezone of the SQL server. This is used when converting dates into timestamps.
 
-**User:** Username to use to connect to the MySQL server.
+**User:** Username to use to connect to the SQL server.
 
-**Password:** Password to use to connect to the MySQL server.
+**Password:** Password to use to connect to the SQL server.
 
 **Database:** Database to consume events for.
 
