@@ -25,6 +25,8 @@ import io.debezium.relational.Table;
 import io.debezium.time.Date;
 import io.debezium.time.MicroTime;
 import io.debezium.time.MicroTimestamp;
+import io.debezium.time.NanoTime;
+import io.debezium.time.NanoTimestamp;
 import io.debezium.time.Time;
 import io.debezium.time.Timestamp;
 import org.apache.kafka.connect.data.Decimal;
@@ -263,9 +265,11 @@ public class Records {
         }
         break;
       case INT64:
-        if (MicroTime.SCHEMA_NAME.equals(schema.name())) {
+        if (MicroTime.SCHEMA_NAME.equals(schema.name()) ||
+          NanoTime.SCHEMA_NAME.equals(schema.name())) {
           converted = Schema.of(Schema.LogicalType.TIME_MICROS);
-        } else if (MicroTimestamp.SCHEMA_NAME.equals(schema.name())) {
+        } else if (MicroTimestamp.SCHEMA_NAME.equals(schema.name()) ||
+          NanoTimestamp.SCHEMA_NAME.equals(schema.name())) {
           converted = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
         } else if (Timestamp.SCHEMA_NAME.equals(schema.name())) {
           converted = Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS);
