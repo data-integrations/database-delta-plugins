@@ -23,16 +23,27 @@ import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.relational.Column;
 import io.debezium.relational.Table;
 import io.debezium.time.Date;
+import io.debezium.time.MicroTime;
+import io.debezium.time.MicroTimestamp;
+import io.debezium.time.NanoTime;
+import io.debezium.time.NanoTimestamp;
+import io.debezium.time.Time;
+import io.debezium.time.Timestamp;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -142,17 +153,45 @@ public class Records {
       Schema fieldSchema = field.getSchema();
       fieldSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullable() : fieldSchema;
       Schema.LogicalType logicalType = fieldSchema.getLogicalType();
-      // TODO: [CDAP-16354] Handle Logical Type for TIME and TIMESTAMP later on.
-      if (Schema.LogicalType.DECIMAL == logicalType) {
-        builder.setDecimal(fieldName, (BigDecimal) val);
-      } else if (Schema.LogicalType.DATE == logicalType) {
-        builder.setDate(fieldName, LocalDate.ofEpochDay((int) val));
-      } else {
+      if (logicalType == null) {
         builder.set(fieldName, val);
+      } else {
+        switch (logicalType) {
+          case DATE:
+            builder.setDate(fieldName, LocalDate.ofEpochDay((int) val));
+            break;
+          case TIMESTAMP_MILLIS:
+            builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MILLISECONDS));
+            break;
+          case TIMESTAMP_MICROS:
+            builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MICROSECONDS));
+            break;
+          case TIME_MILLIS:
+            builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MILLISECONDS.toNanos((int) val)));
+            break;
+          case TIME_MICROS:
+            builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MICROSECONDS.toNanos((long) val)));
+            break;
+          case DECIMAL:
+            builder.setDecimal(fieldName, (BigDecimal) val);
+            break;
+          default:
+            builder.set(fieldName, val);
+            break;
+        }
       }
     }
 
     return builder.build();
+  }
+
+  private static ZonedDateTime getZonedDateTime(long ts, TimeUnit unit) {
+    long mod = unit.convert(1, TimeUnit.SECONDS);
+    int fraction = (int) (ts % mod);
+    long tsInSeconds = unit.toSeconds(ts);
+    // create an Instant with time in seconds and fraction which will be stored as nano seconds.
+    Instant instant = Instant.ofEpochSecond(tsInSeconds, unit.toNanos(fraction));
+    return ZonedDateTime.ofInstant(instant, ZoneOffset.UTC);
   }
 
   private static Object convert(org.apache.kafka.connect.data.Schema schema, Object val) {
@@ -219,12 +258,24 @@ public class Records {
       case INT32:
         if (Date.SCHEMA_NAME.equals(schema.name())) {
           converted = Schema.of(Schema.LogicalType.DATE);
+        } else if (Time.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.TIME_MILLIS);
         } else {
           converted = Schema.of(Schema.Type.INT);
         }
         break;
       case INT64:
-        converted = Schema.of(Schema.Type.LONG);
+        if (MicroTime.SCHEMA_NAME.equals(schema.name()) ||
+          NanoTime.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.TIME_MICROS);
+        } else if (MicroTimestamp.SCHEMA_NAME.equals(schema.name()) ||
+          NanoTimestamp.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        } else if (Timestamp.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS);
+        } else {
+          converted = Schema.of(Schema.Type.LONG);
+        }
         break;
       case FLOAT32:
         converted = Schema.of(Schema.Type.FLOAT);
