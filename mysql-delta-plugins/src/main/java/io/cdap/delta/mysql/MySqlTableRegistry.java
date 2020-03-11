@@ -55,14 +55,16 @@ public class MySqlTableRegistry implements TableRegistry {
     this.driverCleanup = driverCleanup;
     this.properties = new Properties();
     properties.put("user", conf.getUser());
-    properties.put("password", conf.getPassword());;
+    properties.put("password", conf.getPassword());
+    if (conf.getServerTimezone() != null) {
+      properties.put("serverTimezone", conf.getServerTimezone());
+    }
   }
 
   @Override
   public TableList listTables() throws IOException {
     List<TableSummary> tables = new ArrayList<>();
-    try (Connection connection = DriverManager.getConnection(
-      String.format("jdbc:mysql://%s:%d/%s", conf.getHost(), conf.getPort(), conf.getDatabase()), properties)) {
+    try (Connection connection = DriverManager.getConnection(getConnectionString(conf.getDatabase()), properties)) {
       DatabaseMetaData dbMeta = connection.getMetaData();
       try (ResultSet tableResults = dbMeta.getTables(null, null, null, null)) {
         while (tableResults.next()) {
@@ -84,8 +86,7 @@ public class MySqlTableRegistry implements TableRegistry {
 
   @Override
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
-    try (Connection connection = DriverManager.getConnection(
-      String.format("jdbc:mysql://%s:%d/%s", conf.getHost(), conf.getPort(), db), properties)) {
+    try (Connection connection = DriverManager.getConnection(getConnectionString(db), properties)) {
       DatabaseMetaData dbMeta = connection.getMetaData();
       return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
     } catch (SQLException e) {
@@ -136,5 +137,9 @@ public class MySqlTableRegistry implements TableRegistry {
       }
     }
     return Optional.of(new TableDetail(db, table, null, primaryKey, columns));
+  }
+
+  private String getConnectionString(String db) {
+    return String.format("jdbc:mysql://%s:%d/%s", conf.getHost(), conf.getPort(), db);
   }
 }
