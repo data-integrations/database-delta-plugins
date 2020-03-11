@@ -25,7 +25,10 @@
         {
           "name": "serverTimezone",
           "label": "Server Timezone",
-          "widget-type": "textbox"
+          "widget-type": "textbox",
+          "widget-attributes": {
+            "default": "UTC"
+          }
         }
       ]
     },
