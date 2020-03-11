@@ -47,7 +47,7 @@ A MySQL user must be defined with all the following permissions on any database 
 
 Setting up JDBC Driver
 -----------
-In order to set up JDBC driver, just need to upload downloaded MySQL JDBC driver jar and config like this:
+In order to set up JDBC driver, just need to upload downloaded MySQL JDBC driver jar and configure it like this:
 ```
 Name: DriverName
 Class name: com.mysql.cj.jdbc.Driver
