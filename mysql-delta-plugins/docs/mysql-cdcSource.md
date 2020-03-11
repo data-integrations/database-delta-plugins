@@ -26,13 +26,6 @@ gtid_mode                 = on
 enforce_gtid_consistency  = on
 ```
 
-#### Enable Query Log Events (optional)
-Starting with MySQL 5.6 row based replication can be configured to include the original SQL statement with each 
-binlog event. Note that if you’re using an earlier version of MySQL, you will not be able to enable this feature.
-```
-binlog_rows_query_log_events = on
-```
-
 #### Set Up Session Timeouts (optional)
 When initial snapshots of very large databases are executed then it is possible that an established connection will 
 timeout while reading the content of the database tables. We can increase following configs to deal with that.
@@ -44,16 +37,15 @@ wait_timeout        = <duration-in-seconds>
 #### Create A MySQL User
 A MySQL user must be defined with all the following permissions on any database which wants to be replicated:
 **SELECT**, **RELOAD**, **SHOW DATABASES**, **REPLICATION SLAVE** and **REPLICATION CLIENT**.
+```
+mysql> CREATE USER 'user'@'localhost' IDENTIFIED BY 'password';
+mysql> GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user' IDENTIFIED BY 'password';
+mysql> FLUSH PRIVILEGES;
+```
 
 Setting up JDBC Driver
 -----------
-In order to set up JDBC driver, just need to upload downloaded MySQL JDBC driver jar and configure it like this:
-```
-Name: DriverName
-Class name: com.mysql.cj.jdbc.Driver
-Version: 8.0
-Description: This is a jdbc driver for MySQL.
-```
+Just need to install the downloaded MySQL JDBC driver from the hub.
 
 Plugin Properties
 -----------
@@ -61,7 +53,9 @@ Plugin Properties
 
 **Port:** Port to use to connect to the MySQL server.
 
-**Consumer ID:** An unique numeric ID to identify this origin as an event consumer.
+**Consumer ID:** An unique numeric ID to identify this origin as an event consumer. This number cannot be the same as 
+another Delta Replicator that is reading from the server, and it cannot be the same as the server-id for any MySQL 
+slave that is replicating from the server.
 
 **Server Timezone:** Timezone of the MySQL server. This is used when converting dates into timestamps.
 
@@ -72,18 +66,3 @@ Plugin Properties
 **Database:** Database to consume events for.
 
 **JDBC Plugin Name:** Name of the jdbc driver to use.
-
-Example
-----------
-```
-{
-    "host": "localhost",
-    "port": "3306",
-    "consumerID": "1",
-    "serverTimezone": "PST",
-    "user": "xyz",
-    "password": "xyz",
-    "database": "mydb",
-    "jdbcPluginName": "MYJDBC"
-}
-```

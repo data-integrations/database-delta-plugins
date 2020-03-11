@@ -24,7 +24,7 @@ Note that CDC cannot be enabled for master database.
 Enable CDC for the table 'MyTable' will look similar like this:
 ```
 -- =========
--- If ther is no 'role_name', you can set it as NULL.
+-- If there is no 'role_name', you can set it as NULL.
 -- =========
 USE MyDB
 GO
@@ -50,13 +50,7 @@ GO
 
 Setting up JDBC Driver
 -----------
-In order to set up JDBC driver, just need to upload downloaded SQL Server JDBC driver jar and configure it like this:
-```
-Name: DriverName
-Class name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-Version: 8.0
-Description: This is a jdbc driver for SQL Server.
-```
+Just need to install the downloaded Microsoft SQL Server JDBC driver from the hub.
 
 Plugin Properties
 -----------
@@ -73,17 +67,3 @@ Plugin Properties
 **Database:** Database to consume events for.
 
 **JDBC Plugin Name:** Name of the jdbc driver to use.
-
-Example
-----------
-```
-{
-    "host": "localhost",
-    "port": "1433",
-    "database": "MyDB",
-    "jdbcPluginName": "MSJDBC",
-    "user": "test",
-    "password": "test",
-    "serverTimezone": "PST"
-}
-```
