@@ -5,15 +5,15 @@ Description
 -----------
 Microsoft SQL Server CDC Source will replicate all of the row-level changes in the databases on Microsoft SQL server.
 
-Setting up SQL Server
+Setting up Microsoft SQL Server
 -----------
 #### Enable CDC On Database
-Enable CDC for database 'mydb' will look similar like this:
+Enable CDC for database 'MyDB' will look similar like this:
 ```
 -- ====
 -- Enable Database for CDC template
 -- ====
-USE mydb
+USE MyDB
 GO
 EXEC sys.sp_cdc_enable_db
 GO
@@ -21,10 +21,9 @@ GO
 Note that CDC cannot be enabled for master database.
 
 #### Enable CDC On Table
-Enable CDC for the table you want will look similar like this:
+Enable CDC for the table 'MyTable' will look similar like this:
 ```
 -- =========
--- Enable a Table Specifying Filegroup Option Template
 -- If ther is no 'role_name', you can set it as NULL.
 -- =========
 USE MyDB
@@ -81,7 +80,7 @@ Example
 {
     "host": "localhost",
     "port": "1433",
-    "database": "mydb",
+    "database": "MyDB",
     "jdbcPluginName": "MSJDBC",
     "user": "test",
     "password": "test",
