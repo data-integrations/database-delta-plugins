@@ -56,9 +56,7 @@ public class MySqlTableRegistry implements TableRegistry {
     this.properties = new Properties();
     properties.put("user", conf.getUser());
     properties.put("password", conf.getPassword());
-    if (conf.getServerTimezone() != null) {
-      properties.put("serverTimezone", conf.getServerTimezone());
-    }
+    properties.put("serverTimezone", conf.getServerTimezone());
   }
 
   @Override
