@@ -99,7 +99,7 @@ public class MySqlEventReader implements EventReader {
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
       .with("database.password", config.getPassword())
-      .with("server.id", config.getConsumerID())
+      .with("database.server.id", config.getConsumerID())
       .with("database.history", DBSchemaHistory.class.getName())
       .with("database.whitelist", config.getDatabase())
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
