@@ -311,7 +311,7 @@
 
   <profiles>
     <profile>
-      <id>deploy</id>
+      <id>release</id>
       <build>
         <plugins>
 
