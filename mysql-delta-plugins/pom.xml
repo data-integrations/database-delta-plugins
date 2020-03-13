@@ -53,8 +53,7 @@
         <artifactId>maven-bundle-plugin</artifactId>
         <configuration>
           <instructions>
-            <!-- disabled until the plugin is complete -->
-            <!--_exportcontents>io.cdap.delta.mysql.*</_exportcontents-->
+            <_exportcontents>io.cdap.delta.mysql.*</_exportcontents>
             <Embed-Dependency>*;inline=false;scope=compile</Embed-Dependency>
             <Embed-Transitive>true</Embed-Transitive>
             <Embed-Directory>lib</Embed-Directory>
