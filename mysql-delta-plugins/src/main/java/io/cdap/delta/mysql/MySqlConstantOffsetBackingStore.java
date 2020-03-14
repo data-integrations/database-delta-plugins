@@ -33,7 +33,7 @@ import java.util.Map;
  * OffsetBackingStore is pretty weird... keys are ByteBuffer representations of Strings like:
  * {"schema":null,"payload":["delta",{"server":"dummy"}]}
  *
- * and values will contain following items: 1. file; 2. pos; 3. snapshot.
+ * and values will contain following items: 1. file; 2. pos; 3. snapshot; 4. row; 5. event; 6. gtids.
  */
 public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   static final String FILE = "file";
