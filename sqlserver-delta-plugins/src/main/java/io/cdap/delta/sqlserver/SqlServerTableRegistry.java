@@ -25,8 +25,8 @@ import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
 import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.api.assessment.TableSummary;
-import io.cdap.delta.common.ColumnEvaluation;
-import io.cdap.delta.common.DriverCleanup;
+import io.cdap.delta.plugin.common.ColumnEvaluation;
+import io.cdap.delta.plugin.common.DriverCleanup;
 
 import java.io.IOException;
 import java.sql.Connection;

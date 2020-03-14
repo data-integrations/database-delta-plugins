@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.common;
+package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.common.Bytes;
 import io.cdap.delta.api.DeltaRuntimeContext;

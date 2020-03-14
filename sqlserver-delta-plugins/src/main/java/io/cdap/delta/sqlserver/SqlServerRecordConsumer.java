@@ -26,7 +26,7 @@ import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
-import io.cdap.delta.common.Records;
+import io.cdap.delta.plugin.common.Records;
 import io.debezium.connector.sqlserver.SourceInfo;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;

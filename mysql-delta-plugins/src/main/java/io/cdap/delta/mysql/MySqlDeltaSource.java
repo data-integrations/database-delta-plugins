@@ -29,7 +29,7 @@ import io.cdap.delta.api.EventReaderDefinition;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
-import io.cdap.delta.common.DriverCleanup;
+import io.cdap.delta.plugin.common.DriverCleanup;
 
 import java.sql.Driver;
 

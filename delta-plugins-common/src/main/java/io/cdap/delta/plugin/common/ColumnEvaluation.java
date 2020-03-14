@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.common;
+package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnAssessment;

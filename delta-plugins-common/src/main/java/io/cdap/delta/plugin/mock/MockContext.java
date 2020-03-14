@@ -14,9 +14,8 @@
  * the License.
  */
 
-package io.cdap.delta.sqlserver;
+package io.cdap.delta.plugin.mock;
 
-import com.microsoft.sqlserver.jdbc.SQLServerDriver;
 import io.cdap.cdap.api.macro.MacroEvaluator;
 import io.cdap.cdap.api.metrics.Metrics;
 import io.cdap.cdap.api.plugin.PluginProperties;
@@ -30,8 +29,13 @@ import javax.annotation.Nullable;
 /**
  * Used to return the jdbc driver class.
  */
-class MockContext implements DeltaSourceContext {
+public class MockContext implements DeltaSourceContext {
+  private final Class<?> driverClass;
   private final Map<String, byte[]> state = new HashMap<>();
+
+  public MockContext(Class<?> driverClass) {
+    this.driverClass = driverClass;
+  }
 
   @Override
   public void setError(ReplicationError replicationError) {
@@ -101,7 +105,7 @@ class MockContext implements DeltaSourceContext {
 
   @Override
   public <T> Class<T> loadPluginClass(String pluginId) {
-    return (Class<T>) SQLServerDriver.class;
+    return (Class<T>) driverClass;
   }
 
   @Override

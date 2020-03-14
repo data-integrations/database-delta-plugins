@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.common;
+package io.cdap.delta.plugin.common;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverPropertyInfo;
