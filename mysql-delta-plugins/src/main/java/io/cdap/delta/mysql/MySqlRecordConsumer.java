@@ -298,19 +298,13 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   // This method is used for generating a cdap offsets from debezium sourceRecord.
   private Map<String, String> generateCdapOffsets(SourceRecord sourceRecord) {
     Map<String, String> deltaOffset = new HashMap<>();
-    Struct value = (Struct) sourceRecord.value();
-    if (value == null) { // safety check to avoid NPE
-      return deltaOffset;
-    }
-
-    Struct source = (Struct) value.get("source");
-    if (source == null) { // safety check to avoid NPE
-      return deltaOffset;
-    }
-
-    String binlogFile = (String) source.get(MySqlConstantOffsetBackingStore.FILE);
-    Long binlogPosition = (Long) source.get(MySqlConstantOffsetBackingStore.POS);
-    Boolean snapshot = (Boolean) source.get(MySqlConstantOffsetBackingStore.SNAPSHOT);
+    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
+    String binlogFile = (String) sourceOffset.get(MySqlConstantOffsetBackingStore.FILE);
+    Long binlogPosition = (Long) sourceOffset.get(MySqlConstantOffsetBackingStore.POS);
+    Boolean snapshot = (Boolean) sourceOffset.get(MySqlConstantOffsetBackingStore.SNAPSHOT);
+    Long rowsToSkip = (Long) sourceOffset.get(MySqlConstantOffsetBackingStore.ROW);
+    Long eventsToSkip = (Long) sourceOffset.get(MySqlConstantOffsetBackingStore.EVENT);
+    String gtidSet = (String) sourceOffset.get(MySqlConstantOffsetBackingStore.GTID_SET);
 
     if (binlogFile != null) {
       deltaOffset.put(MySqlConstantOffsetBackingStore.FILE, binlogFile);
@@ -320,6 +314,15 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     }
     if (snapshot != null) {
       deltaOffset.put(MySqlConstantOffsetBackingStore.SNAPSHOT, String.valueOf(snapshot));
+    }
+    if (rowsToSkip != null) {
+      deltaOffset.put(MySqlConstantOffsetBackingStore.ROW, String.valueOf(rowsToSkip));
+    }
+    if (eventsToSkip != null) {
+      deltaOffset.put(MySqlConstantOffsetBackingStore.EVENT, String.valueOf(eventsToSkip));
+    }
+    if (gtidSet != null) {
+      deltaOffset.put(MySqlConstantOffsetBackingStore.GTID_SET, gtidSet);
     }
 
     return deltaOffset;

@@ -39,6 +39,10 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   static final String FILE = "file";
   static final String POS = "pos";
   static final String SNAPSHOT = "snapshot";
+  static final String ROW = "row";
+  static final String EVENT = "event";
+  static final String GTID_SET = "gtids";
+
   private static final Gson GSON = new Gson();
   // The key is hardcoded here
   private static final ByteBuffer KEY =
@@ -50,6 +54,9 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     String fileStr = originalConfig.get(FILE);
     String posStr = originalConfig.get(POS);
     String snapshotStr = originalConfig.get(SNAPSHOT);
+    String rowStr = originalConfig.get(ROW);
+    String eventStr = originalConfig.get(EVENT);
+    String gtidSetStr = originalConfig.get(GTID_SET);
 
     Map<String, Object> offset = new HashMap<>();
     if (!Strings.isNullOrEmpty(fileStr)) {
@@ -60,6 +67,15 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     }
     if (!Strings.isNullOrEmpty(snapshotStr)) {
       offset.put(SNAPSHOT, Boolean.valueOf(snapshotStr));
+    }
+    if (!Strings.isNullOrEmpty(rowStr)) {
+      offset.put(ROW, Long.valueOf(rowStr));
+    }
+    if (!Strings.isNullOrEmpty(eventStr)) {
+      offset.put(EVENT, Long.valueOf(eventStr));
+    }
+    if (!Strings.isNullOrEmpty(gtidSetStr)) {
+      offset.put(GTID_SET, gtidSetStr);
     }
 
     if (offset.isEmpty()) {
