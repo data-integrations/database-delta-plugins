@@ -29,7 +29,6 @@
 
   <properties>
     <port.file>${project.build.outputDirectory}/port.properties</port.file>
-    <properties.file>${project.build.outputDirectory}/pom.properties</properties.file>
     <sqlserver.image>mcr.microsoft.com/mssql/server:2017-CU19-ubuntu-16.04</sqlserver.image>
     <sqlserver.password>D3ltaPass</sqlserver.password>
   </properties>
@@ -104,25 +103,20 @@
       </plugin>
 
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>properties-maven-plugin</artifactId>
-        <version>1.0.0</version>
-        <executions>
-          <execution>
-            <phase>generate-resources</phase>
-            <goals>
-              <goal>write-project-properties</goal>
-            </goals>
-            <configuration>
-              <outputFile>${properties.file}</outputFile>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <systemProperties>
+            <property>
+              <name>sqlserver.port.file</name>
+              <value>${port.file}</value>
+            </property>
+            <property>
+              <name>sqlserver.password</name>
+              <value>${sqlserver.password}</value>
+            </property>
+          </systemProperties>
+        </configuration>
       </plugin>
 
       <plugin>

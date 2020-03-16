@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.common;
+package io.cdap.delta.plugin.common;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

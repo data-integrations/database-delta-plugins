@@ -25,7 +25,7 @@ import io.cdap.delta.api.assessment.Problem;
 import io.cdap.delta.api.assessment.TableAssessment;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
-import io.cdap.delta.common.ColumnEvaluation;
+import io.cdap.delta.plugin.common.ColumnEvaluation;
 
 import java.sql.Types;
 import java.util.ArrayList;

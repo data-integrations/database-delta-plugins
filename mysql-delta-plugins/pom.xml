@@ -27,6 +27,12 @@
 
   <artifactId>mysql-delta-plugins</artifactId>
 
+  <properties>
+    <port.file>${project.build.outputDirectory}/port.properties</port.file>
+    <mysql.image>mysql/mysql-server:8.0.13</mysql.image>
+    <mysql.root.password>D3ltaPass</mysql.root.password>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.debezium</groupId>
@@ -44,6 +50,12 @@
       <artifactId>delta-plugins-common</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>8.0.19</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
@@ -58,6 +70,54 @@
             <Embed-Transitive>true</Embed-Transitive>
             <Embed-Directory>lib</Embed-Directory>
           </instructions>
+        </configuration>
+      </plugin>
+
+
+      <plugin>
+        <groupId>io.fabric8</groupId>
+        <artifactId>docker-maven-plugin</artifactId>
+        <version>0.33.0</version>
+        <configuration>
+          <images>
+            <image>
+              <name>${mysql.image}</name>
+              <run>
+                <env>
+                  <MYSQL_ROOT_PASSWORD>${mysql.root.password}</MYSQL_ROOT_PASSWORD>
+                  <MYSQL_ROOT_HOST>%</MYSQL_ROOT_HOST>
+                </env>
+                <ports>
+                  <port>mysql.port:3306</port>
+                </ports>
+                <portPropertyFile>
+                  ${port.file}
+                </portPropertyFile>
+                <cmd>--server-id=1 --log_bin=mysql-bin --binlog_format=row --binlog_row_image=full</cmd>
+                <wait>
+                  <log>ready for connections</log>
+                  <time>30000</time>
+                </wait>
+              </run>
+            </image>
+          </images>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <systemProperties>
+            <property>
+              <name>mysql.port.file</name>
+              <value>${port.file}</value>
+            </property>
+            <property>
+              <name>mysql.root.password</name>
+              <value>${mysql.root.password}</value>
+            </property>
+          </systemProperties>
         </configuration>
       </plugin>
 

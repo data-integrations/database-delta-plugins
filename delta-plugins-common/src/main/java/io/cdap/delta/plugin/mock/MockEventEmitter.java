@@ -14,7 +14,7 @@
  * the License.
  */
 
-package io.cdap.delta.sqlserver;
+package io.cdap.delta.plugin.mock;
 
 import io.cdap.delta.api.DDLEvent;
 import io.cdap.delta.api.DMLEvent;
@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Used to keep track of events emitted for tests.
  */
-class MockEventEmitter implements EventEmitter {
+public class MockEventEmitter implements EventEmitter {
   private final List<DDLEvent> ddlEvents;
   private final List<DMLEvent> dmlEvents;
   private final CountDownLatch latch;
