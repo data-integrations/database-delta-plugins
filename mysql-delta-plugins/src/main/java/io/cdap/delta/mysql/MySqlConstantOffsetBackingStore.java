@@ -33,12 +33,16 @@ import java.util.Map;
  * OffsetBackingStore is pretty weird... keys are ByteBuffer representations of Strings like:
  * {"schema":null,"payload":["delta",{"server":"dummy"}]}
  *
- * and values will contain following items: 1. file; 2. pos; 3. snapshot.
+ * and values will contain following items: 1. file; 2. pos; 3. snapshot; 4. row; 5. event; 6. gtids.
  */
 public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   static final String FILE = "file";
   static final String POS = "pos";
   static final String SNAPSHOT = "snapshot";
+  static final String ROW = "row";
+  static final String EVENT = "event";
+  static final String GTID_SET = "gtids";
+
   private static final Gson GSON = new Gson();
   // The key is hardcoded here
   private static final ByteBuffer KEY =
@@ -50,6 +54,9 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     String fileStr = originalConfig.get(FILE);
     String posStr = originalConfig.get(POS);
     String snapshotStr = originalConfig.get(SNAPSHOT);
+    String rowStr = originalConfig.get(ROW);
+    String eventStr = originalConfig.get(EVENT);
+    String gtidSetStr = originalConfig.get(GTID_SET);
 
     Map<String, Object> offset = new HashMap<>();
     if (!Strings.isNullOrEmpty(fileStr)) {
@@ -60,6 +67,15 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     }
     if (!Strings.isNullOrEmpty(snapshotStr)) {
       offset.put(SNAPSHOT, Boolean.valueOf(snapshotStr));
+    }
+    if (!Strings.isNullOrEmpty(rowStr)) {
+      offset.put(ROW, Long.valueOf(rowStr));
+    }
+    if (!Strings.isNullOrEmpty(eventStr)) {
+      offset.put(EVENT, Long.valueOf(eventStr));
+    }
+    if (!Strings.isNullOrEmpty(gtidSetStr)) {
+      offset.put(GTID_SET, gtidSetStr);
     }
 
     if (offset.isEmpty()) {

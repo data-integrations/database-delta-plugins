@@ -93,6 +93,9 @@ public class MySqlEventReader implements EventReader {
       .with("file", state.getOrDefault(MySqlConstantOffsetBackingStore.FILE, ""))
       .with("pos", state.getOrDefault(MySqlConstantOffsetBackingStore.POS, ""))
       .with("snapshot", state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, ""))
+      .with("row", state.getOrDefault(MySqlConstantOffsetBackingStore.ROW, ""))
+      .with("event", state.getOrDefault(MySqlConstantOffsetBackingStore.EVENT, ""))
+      .with("gtids", state.getOrDefault(MySqlConstantOffsetBackingStore.GTID_SET, ""))
       /* begin connector properties */
       .with("name", "delta")
       .with("database.hostname", config.getHost())
