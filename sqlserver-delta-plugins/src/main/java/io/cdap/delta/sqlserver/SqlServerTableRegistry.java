@@ -20,6 +20,7 @@ import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
+import io.cdap.delta.api.assessment.TableCDCNotEnabledException;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
@@ -97,10 +98,19 @@ public class SqlServerTableRegistry implements TableRegistry {
   }
 
   @Override
-  public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
+  public TableDetail describeTable(String db, String table)
+    throws TableNotFoundException, TableCDCNotEnabledException, IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+      Statement statement = connection.createStatement();
+      String query = String.format("SELECT [name], is_tracked_by_cdc FROM sys.tables where name = '%s'", table);
+      ResultSet rs = statement.executeQuery(query);
+      if (rs.next()) {
+        // if cdc is enabled, then the column 'is_tracked_by_cdc' should be 1
+        if (rs.getInt("is_tracked_by_cdc") != 1) {
+          throw new TableCDCNotEnabledException(db, table, "");
+        }
+      }
       DatabaseMetaData dbMeta = connection.getMetaData();
-      // TODO: CDAP-16277 do not lose difference in sql server types
       return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
     } catch (SQLException e) {
       throw new IOException(e.getMessage(), e);

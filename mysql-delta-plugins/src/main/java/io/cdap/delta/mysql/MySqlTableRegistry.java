@@ -20,6 +20,7 @@ import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
+import io.cdap.delta.api.assessment.TableCDCNotEnabledException;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
 import io.cdap.delta.api.assessment.TableNotFoundException;
@@ -83,7 +84,8 @@ public class MySqlTableRegistry implements TableRegistry {
   }
 
   @Override
-  public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
+  public TableDetail describeTable(String db, String table)
+    throws TableNotFoundException, TableCDCNotEnabledException, IOException {
     try (Connection connection = DriverManager.getConnection(getConnectionString(db), properties)) {
       DatabaseMetaData dbMeta = connection.getMetaData();
       return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
