@@ -47,7 +47,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
       columnAssessments.add(evaluateColumn(columnDetail).getAssessment());
     }
 
-    List<Problem> problems = new ArrayList<>();
+    List<Problem> problems = new ArrayList<>(tableDetail.getFeatures());
     if (tableDetail.getPrimaryKey().isEmpty()) {
       problems.add(new Problem("Missing Primary Key", "Tables must have a primary key in order to be replicated.",
                                "Please alter the table to use a primary key, or select a different table", ""));

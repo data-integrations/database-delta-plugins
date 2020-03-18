@@ -67,13 +67,14 @@ public class MySqlTableRegistry implements TableRegistry {
       try (ResultSet tableResults = dbMeta.getTables(null, null, null, null)) {
         while (tableResults.next()) {
           String tableName = tableResults.getString(3);
-          Optional<TableDetail> tableDetail = getTableDetail(dbMeta, conf.getDatabase(), tableName);
-          if (!tableDetail.isPresent()) {
+          Optional<TableDetail.Builder> builder = getTableDetailBuilder(dbMeta, conf.getDatabase(), tableName);
+          if (!builder.isPresent()) {
             // shouldn't happen
             continue;
           }
-          tables.add(new TableSummary(conf.getDatabase(), tableName, tableDetail.get().getNumColumns(),
-                                      tableDetail.get().getSchema()));
+          TableDetail tableDetail = builder.get().build();
+          tables.add(new TableSummary(conf.getDatabase(), tableName, tableDetail.getNumColumns(),
+                                      tableDetail.getSchema()));
         }
       }
       return new TableList(tables);
@@ -86,7 +87,9 @@ public class MySqlTableRegistry implements TableRegistry {
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
     try (Connection connection = DriverManager.getConnection(getConnectionString(db), properties)) {
       DatabaseMetaData dbMeta = connection.getMetaData();
-      return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
+      TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, table)
+        .orElseThrow(() -> new TableNotFoundException(db, table, ""));
+      return builder.build();
     } catch (SQLException e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -112,7 +115,8 @@ public class MySqlTableRegistry implements TableRegistry {
     driverCleanup.close();
   }
 
-  private Optional<TableDetail> getTableDetail(DatabaseMetaData dbMeta, String db, String table) throws SQLException {
+  private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, String db, String table)
+    throws SQLException {
     List<ColumnDetail> columns = new ArrayList<>();
     try (ResultSet columnResults = dbMeta.getColumns(db, null, table, null)) {
       while (columnResults.next()) {
@@ -134,7 +138,9 @@ public class MySqlTableRegistry implements TableRegistry {
         primaryKey.add(keyResults.getString("COLUMN_NAME"));
       }
     }
-    return Optional.of(new TableDetail(db, table, null, primaryKey, columns));
+    return Optional.of(TableDetail.builder(db, table, null)
+                         .setPrimaryKey(primaryKey)
+                         .setColumns(columns));
   }
 
   private String getConnectionString(String db) {

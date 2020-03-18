@@ -19,6 +19,7 @@ package io.cdap.delta.sqlserver;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSupport;
+import io.cdap.delta.api.assessment.Problem;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
@@ -80,13 +81,14 @@ public class SqlServerTableRegistry implements TableRegistry {
             if (!tableNames.contains(tableName)) {
               continue;
             }
-            Optional<TableDetail> tableDetail = getTableDetail(dbMeta, config.getDatabase(), tableName);
-            if (!tableDetail.isPresent()) {
+            Optional<TableDetail.Builder> builder = getTableDetailBuilder(dbMeta, config.getDatabase(), tableName);
+            if (!builder.isPresent()) {
               // shouldn't happen
               continue;
             }
-            tables.add(new TableSummary(config.getDatabase(), tableName, tableDetail.get().getNumColumns(),
-                                        tableDetail.get().getSchema()));
+            TableDetail tableDetail = builder.get().build();
+            tables.add(new TableSummary(config.getDatabase(), tableName, tableDetail.getNumColumns(),
+                                        tableDetail.getSchema()));
           }
         }
         return new TableList(tables);
@@ -99,9 +101,33 @@ public class SqlServerTableRegistry implements TableRegistry {
   @Override
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
+      List<Problem> missingFeatures = new ArrayList<>();
       DatabaseMetaData dbMeta = connection.getMetaData();
-      // TODO: CDAP-16277 do not lose difference in sql server types
-      return getTableDetail(dbMeta, db, table).orElseThrow(() -> new TableNotFoundException(db, table, ""));
+      TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, table)
+        .orElseThrow(() -> new TableNotFoundException(db, table, ""));
+
+      String query = String.format("SELECT [name], is_tracked_by_cdc FROM sys.tables where name = '%s'", table);
+      try (Statement statement = connection.createStatement();
+           ResultSet rs = statement.executeQuery(query)) {
+        if (rs.next()) {
+          // if cdc is enabled, then the column 'is_tracked_by_cdc' should be 1
+          if (rs.getInt("is_tracked_by_cdc") != 1) {
+            missingFeatures.add(
+              new Problem("Table CDC Feature Not Enabled",
+                          String.format("The CDC feature for table '%s' in database '%s' was not enabled.", table, db),
+                          "Check the table CDC settings",
+                          null));
+          }
+        }
+      } catch (Exception e) {
+        missingFeatures.add(
+          new Problem("Unable To Check If CDC Was Enabled",
+                      String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
+                                    table, db),
+                      "Check database connectivity and table information",
+                      null));
+      }
+      return builder.setFeatures(missingFeatures).build();
     } catch (SQLException e) {
       throw new IOException(e.getMessage(), e);
     }
@@ -127,7 +153,8 @@ public class SqlServerTableRegistry implements TableRegistry {
     driverCleanup.close();
   }
 
-  private Optional<TableDetail> getTableDetail(DatabaseMetaData dbMeta, String db, String table) throws SQLException {
+  private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, String db, String table)
+    throws SQLException {
     List<ColumnDetail> columns = new ArrayList<>();
     // this schema name is needed to construct the full table name, e.g, dbo.test for debizium to fetch records from
     // sql server. The table name is constructed using [schemaName].[tableName]. However, the dbMeta is not able
@@ -156,6 +183,8 @@ public class SqlServerTableRegistry implements TableRegistry {
       }
     }
 
-    return Optional.of(new TableDetail(db, table, schemaName, primaryKey, columns));
+    return Optional.of(TableDetail.builder(db, table, schemaName)
+                         .setPrimaryKey(primaryKey)
+                         .setColumns(columns));
   }
 }
