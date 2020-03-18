@@ -105,19 +105,27 @@ public class SqlServerTableRegistry implements TableRegistry {
       DatabaseMetaData dbMeta = connection.getMetaData();
       TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, table)
         .orElseThrow(() -> new TableNotFoundException(db, table, ""));
-      Statement statement = connection.createStatement();
+
       String query = String.format("SELECT [name], is_tracked_by_cdc FROM sys.tables where name = '%s'", table);
-      try (ResultSet rs = statement.executeQuery(query)) {
+      try (Statement statement = connection.createStatement();
+           ResultSet rs = statement.executeQuery(query)) {
         if (rs.next()) {
           // if cdc is enabled, then the column 'is_tracked_by_cdc' should be 1
           if (rs.getInt("is_tracked_by_cdc") != 1) {
             missingFeatures.add(
               new Problem("Table CDC Feature Not Enabled",
                           String.format("The CDC feature for table '%s' in database '%s' was not enabled.", table, db),
-                          "Check the table CDC settings and permissions",
+                          "Check the table CDC settings",
                           null));
           }
         }
+      } catch (Exception e) {
+        missingFeatures.add(
+          new Problem("Unable To Check If CDC Was Enabled",
+                      String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
+                                    table, db),
+                      "Check database connectivity and table information",
+                      null));
       }
       return builder.setFeatures(missingFeatures).build();
     } catch (SQLException e) {
