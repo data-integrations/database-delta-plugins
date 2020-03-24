@@ -39,6 +39,9 @@ import java.util.Map;
 public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
   static final String COLUMN_LENGTH = "COLUMN_LENGTH";
   static final String SCALE = "SCALE";
+  static final String TYPE_NAME = "TYPE_NAME";
+  private static final String GEOMETRY = "GEOMETRY";
+  private static final String GEOGRAPHY = "GEOGRAPHY";
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -122,6 +125,15 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
       case Types.BINARY:
       case Types.VARBINARY:
       case Types.LONGVARBINARY:
+        properties = detail.getProperties();
+        String upperCaseTypeName = properties.get(TYPE_NAME).toUpperCase();
+        if (GEOGRAPHY.equals(upperCaseTypeName) || GEOMETRY.equals(upperCaseTypeName)) {
+          support = ColumnSupport.NO;
+          suggestion = new ColumnSuggestion("Unsupported SQL Server Type: " + upperCaseTypeName,
+                                            Collections.emptyList());
+          schema = null;
+          break;
+        }
         schema = Schema.of(Schema.Type.BYTES);
         break;
 

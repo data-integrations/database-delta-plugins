@@ -166,6 +166,7 @@ public class SqlServerTableRegistry implements TableRegistry {
         Map<String, String> properties = new HashMap<>();
         properties.put(SqlServerTableAssessor.COLUMN_LENGTH, columnResults.getString("COLUMN_SIZE"));
         properties.put(SqlServerTableAssessor.SCALE, columnResults.getString("DECIMAL_DIGITS"));
+        properties.put(SqlServerTableAssessor.TYPE_NAME, columnResults.getString("TYPE_NAME"));
         schemaName = columnResults.getString("TABLE_SCHEM");
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
                                      JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
