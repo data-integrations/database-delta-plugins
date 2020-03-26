@@ -127,11 +127,9 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
         schema = null;
     }
 
-    // if schema is null, we intentionally use NULL as the field schema to avoid potential NPE during table standardize
-    Schema.Field field = schema == null ? Schema.Field.of(detail.getName(), Schema.of(Schema.Type.NULL)) :
+    Schema.Field field = schema == null ? null :
       Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
-    String type = schema == null ? "N/A" : detail.getType().getName();
-    ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), type)
+    ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), detail.getType().getName())
       .setSupport(support)
       .setSuggestion(suggestion)
       .build();

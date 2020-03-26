@@ -18,6 +18,7 @@ package io.cdap.delta.sqlserver;
 
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.Problem;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
@@ -137,6 +138,9 @@ public class SqlServerTableRegistry implements TableRegistry {
     List<Schema.Field> columnSchemas = new ArrayList<>();
     for (ColumnDetail detail : tableDetail.getColumns()) {
       ColumnEvaluation evaluation = SqlServerTableAssessor.evaluateColumn(detail);
+      if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
+        continue;
+      }
       columnSchemas.add(evaluation.getField());
     }
     Schema schema = Schema.recordOf("outputSchema", columnSchemas);

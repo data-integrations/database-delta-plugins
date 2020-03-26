@@ -18,6 +18,7 @@ package io.cdap.delta.mysql;
 
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.assessment.ColumnDetail;
+import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.StandardizedTableDetail;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableList;
@@ -99,6 +100,9 @@ public class MySqlTableRegistry implements TableRegistry {
     List<Schema.Field> columnSchemas = new ArrayList<>();
     for (ColumnDetail detail : tableDetail.getColumns()) {
       ColumnEvaluation evaluation = MySqlTableAssessor.evaluateColumn(detail);
+      if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
+        continue;
+      }
       columnSchemas.add(evaluation.getField());
     }
     Schema schema = Schema.recordOf("outputSchema", columnSchemas);
