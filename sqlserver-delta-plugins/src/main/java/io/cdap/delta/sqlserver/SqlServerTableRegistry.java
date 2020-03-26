@@ -139,7 +139,7 @@ public class SqlServerTableRegistry implements TableRegistry {
     for (ColumnDetail detail : tableDetail.getColumns()) {
       ColumnEvaluation evaluation = SqlServerTableAssessor.evaluateColumn(detail);
       if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
-        throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
+        continue;
       }
       columnSchemas.add(evaluation.getField());
     }

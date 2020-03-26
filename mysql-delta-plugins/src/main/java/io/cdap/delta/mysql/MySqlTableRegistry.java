@@ -101,7 +101,7 @@ public class MySqlTableRegistry implements TableRegistry {
     for (ColumnDetail detail : tableDetail.getColumns()) {
       ColumnEvaluation evaluation = MySqlTableAssessor.evaluateColumn(detail);
       if (evaluation.getAssessment().getSupport().equals(ColumnSupport.NO)) {
-        throw new IllegalArgumentException("Unsupported SQL Type: " + detail.getType());
+        continue;
       }
       columnSchemas.add(evaluation.getField());
     }
