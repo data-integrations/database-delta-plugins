@@ -152,6 +152,9 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
                      .setTable(tableName)
                      .build());
 
+      // try to emit create database event before create table event
+      emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
+
       emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
                      .setTable(tableName)
                      .setSchema(schema)
