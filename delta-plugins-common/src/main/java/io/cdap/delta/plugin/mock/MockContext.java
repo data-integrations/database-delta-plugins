@@ -73,6 +73,11 @@ public class MockContext implements DeltaSourceContext {
   }
 
   @Override
+  public Map<String, String> getRuntimeArguments() {
+    return new HashMap<>();
+  }
+
+  @Override
   public int getInstanceId() {
     return 0;
   }
