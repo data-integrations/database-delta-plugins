@@ -132,8 +132,6 @@ public class Records {
   /**
    * Convert a Debezium row, represented as a Kafka Connect Struct, into a CDAP StructuredRecord.
    *
-   * TODO: investigate logical types
-   *
    * @param struct
    * @return
    */
