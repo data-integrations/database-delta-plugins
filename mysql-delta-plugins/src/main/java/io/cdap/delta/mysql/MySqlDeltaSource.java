@@ -57,7 +57,6 @@ public class MySqlDeltaSource implements DeltaSource {
   @Override
   public EventReader createReader(EventReaderDefinition definition, DeltaSourceContext context,
                                   EventEmitter eventEmitter) {
-    // TODO: use the tables passed in to read the required tables and columns
     return new MySqlEventReader(definition.getTables(), conf, context, eventEmitter);
   }
 
