@@ -21,7 +21,6 @@ import io.cdap.delta.api.assessment.ColumnAssessment;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSuggestion;
 import io.cdap.delta.api.assessment.ColumnSupport;
-import io.cdap.delta.api.assessment.Problem;
 import io.cdap.delta.api.assessment.TableAssessment;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
@@ -47,15 +46,7 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
       columnAssessments.add(evaluateColumn(columnDetail).getAssessment());
     }
 
-    List<Problem> problems = new ArrayList<>(tableDetail.getFeatures());
-    if (tableDetail.getPrimaryKey().isEmpty()) {
-      problems.add(new Problem("Missing Primary Key",
-                               String.format("Table '%s' in database '%s' must have a primary key in order to be " +
-                                               "replicated.", tableDetail.getTable(), tableDetail.getDatabase()),
-                               "Please alter the table to use a primary key, or select a different table",
-                               "Not able to replicate this table"));
-    }
-    return new TableAssessment(columnAssessments, problems);
+    return new TableAssessment(columnAssessments, tableDetail.getFeatures());
   }
 
   // This is based on https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-type-conversions.html
