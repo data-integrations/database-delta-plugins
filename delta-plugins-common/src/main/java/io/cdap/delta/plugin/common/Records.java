@@ -31,6 +31,7 @@ import io.debezium.time.Time;
 import io.debezium.time.Timestamp;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 
 import java.math.BigDecimal;
@@ -67,7 +68,11 @@ public class Records {
   public static Schema getSchema(Table table, JdbcValueConverters converters) {
     List<Schema.Field> fields = new ArrayList<>(table.columns().size());
     for (Column column : table.columns()) {
-      fields.add(Schema.Field.of(column.name(), convert(converters.schemaBuilder(column).build())));
+      SchemaBuilder schemaBuilder = converters.schemaBuilder(column);
+      if (column.isOptional()) {
+        schemaBuilder.optional();
+      }
+      fields.add(Schema.Field.of(column.name(), convert(schemaBuilder.build())));
     }
     return Schema.recordOf(table.id().table(), fields);
   }
@@ -87,10 +92,15 @@ public class Records {
     }
 
     List<Schema.Field> fields = new ArrayList<>(columns.size());
-    for (SourceColumn column : columns) {
-      String columnName = column.getName();
+    for (SourceColumn sourceColumn : columns) {
+      String columnName = sourceColumn.getName();
+      Column column = table.columnWithName(columnName);
+      SchemaBuilder schemaBuilder = converters.schemaBuilder(column);
+      if (column.isOptional()) {
+        schemaBuilder.optional();
+      }
       fields.add(Schema.Field.of(columnName,
-                                 convert(converters.schemaBuilder(table.columnWithName(columnName)).build())));
+                                 convert(schemaBuilder.build())));
     }
 
     return Schema.recordOf(table.id().table(), fields);
