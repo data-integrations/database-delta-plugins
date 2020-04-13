@@ -116,7 +116,7 @@ public class SqlServerTableRegistry implements TableRegistry {
               new Problem("Table CDC Feature Not Enabled",
                           String.format("The CDC feature for table '%s' in database '%s' was not enabled.", table, db),
                           "Check the table CDC settings",
-                          null));
+                          "Not able to replicate table changes"));
           }
         }
       } catch (Exception e) {
@@ -178,7 +178,7 @@ public class SqlServerTableRegistry implements TableRegistry {
       return Optional.empty();
     }
     List<String> primaryKey = new ArrayList<>();
-    try (ResultSet keyResults = dbMeta.getPrimaryKeys(db, null, table)) {
+    try (ResultSet keyResults = dbMeta.getPrimaryKeys(db, schemaName, table)) {
       while (keyResults.next()) {
         primaryKey.add(keyResults.getString("COLUMN_NAME"));
       }
