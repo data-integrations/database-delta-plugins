@@ -50,8 +50,13 @@ public class SqlServerConfig extends PluginConfig {
   @Description("Name of the jdbc plugin to use.")
   private String jdbcPluginName;
 
+  @Nullable
+  @Description("Whether to emit drop database and drop table events during the snapshot phase.")
+  private Boolean dropDuringSnapshot;
+
   public SqlServerConfig(String host, int port, String user, String password,
-                         String database, @Nullable String serverTimezone, String jdbcPluginName) {
+                         String database, @Nullable String serverTimezone, String jdbcPluginName,
+                         boolean dropDuringSnapshot) {
     this.host = host;
     this.port = port;
     this.user = user;
@@ -59,6 +64,7 @@ public class SqlServerConfig extends PluginConfig {
     this.database = database;
     this.serverTimezone = serverTimezone;
     this.jdbcPluginName = jdbcPluginName;
+    this.dropDuringSnapshot = dropDuringSnapshot;
   }
 
   public String getDatabase() {
@@ -91,5 +97,9 @@ public class SqlServerConfig extends PluginConfig {
 
   public String getJDBCPluginId() {
     return String.format("%s.%s.%s", "sqlserversource", "jbdc", jdbcPluginName);
+  }
+
+  public boolean shouldDropDuringSnapshot() {
+    return dropDuringSnapshot == null ? false : dropDuringSnapshot;
   }
 }

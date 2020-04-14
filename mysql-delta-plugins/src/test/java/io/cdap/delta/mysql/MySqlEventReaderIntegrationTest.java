@@ -193,4 +193,5 @@ public class MySqlEventReaderIntegrationTest {
     // this fails with schemas that are different
     // Assert.assertEquals(expected, row);
   }
+
 }

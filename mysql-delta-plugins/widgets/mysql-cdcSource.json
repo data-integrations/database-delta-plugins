@@ -5,7 +5,7 @@
   "display-name": "MySQL",
   "configuration-groups": [
     {
-      "label": "Database Location",
+      "label": "Basic",
       "properties": [
         {
           "name": "host",
@@ -26,14 +26,6 @@
           "widget-type": "textbox"
         },
         {
-          "name": "serverTimezone",
-          "label": "Server Timezone",
-          "widget-type": "textbox",
-          "widget-attributes": {
-            "default": "UTC"
-          }
-        },
-        {
           "name": "database",
           "label": "Database Name",
           "widget-type": "textbox"
@@ -49,7 +41,7 @@
       ]
     },
     {
-      "label": "User Account",
+      "label": "Credentials",
       "properties": [
         {
           "name": "user",
@@ -60,6 +52,35 @@
           "name": "password",
           "label": "Password",
           "widget-type": "password"
+        }
+      ]
+    },
+    {
+      "label": "Advanced",
+      "properties": [
+        {
+          "name": "serverTimezone",
+          "label": "Server Timezone",
+          "widget-type": "textbox",
+          "widget-attributes": {
+            "default": "UTC"
+          }
+        },
+        {
+          "name": "dropDuringSnapshot",
+          "label": "Drop Tables During Snapshot",
+          "widget-type": "toggle",
+          "widget-attributes": {
+            "default": "false",
+            "on": {
+              "value": "true",
+              "label": "True"
+            },
+            "off": {
+              "value": "false",
+              "label": "False"
+            }
+          }
         }
       ]
     }

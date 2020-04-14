@@ -55,14 +55,16 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   // this is hack to track the tables getting created or not
   private final Set<SourceTable> trackingTables;
   private final Map<String, SourceTable> sourceTableMap;
+  private final boolean dropDuringSnapshot;
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
-                          Map<String, SourceTable> sourceTableMap) {
+                          Map<String, SourceTable> sourceTableMap, boolean dropDuringSnapshot) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.trackingTables = new HashSet<>();
     this.sourceTableMap = sourceTableMap;
+    this.dropDuringSnapshot = dropDuringSnapshot;
   }
 
   @Override
@@ -148,9 +150,11 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       }
 
       // try to always drop the table before snapshot the schema.
-      emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
-                     .setTable(tableName)
-                     .build());
+      if (dropDuringSnapshot) {
+        emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
+                       .setTable(tableName)
+                       .build());
+      }
 
       // try to emit create database event before create table event
       emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());

@@ -69,6 +69,10 @@ slave that is replicating from the server.
 
 **JDBC Plugin Name:** Name of the jdbc driver to use.
 
+**Drop Tables During Snapshot:** Whether to emit drop database and drop table change events at the start
+of the snapshot phase. Set this to false if you would like to avoid accidentally deleting tables in the
+target system. However, when set to false, it can result in duplicate data in the target.
+
 Troubleshooting
 -----------
 If the replicator is able to start snapshotting the data, but fails when it switches over to read from the 

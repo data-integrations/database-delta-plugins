@@ -137,9 +137,70 @@ public class SqlServerEventReaderIntegrationTest {
                                               Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
 
     DeltaSourceContext context = new MockContext(SQLServerDriver.class);
+    MockEventEmitter eventEmitter = new MockEventEmitter(5);
+    SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
+                                                 DB, null, "mssql", true);
+
+    SqlServerEventReader eventReader = new SqlServerEventReader(Collections.singleton(sourceTable), config,
+                                                                context, eventEmitter);
+
+    eventReader.start(new Offset());
+
+    eventEmitter.waitForExpectedEvents(30, TimeUnit.SECONDS);
+
+    Assert.assertEquals(3, eventEmitter.getDdlEvents().size());
+    Assert.assertEquals(2, eventEmitter.getDmlEvents().size());
+
+    DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
+    Assert.assertEquals(DDLOperation.DROP_TABLE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
+    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
+
+    ddlEvent = eventEmitter.getDdlEvents().get(1);
+    Assert.assertEquals(DDLOperation.CREATE_DATABASE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
+
+    ddlEvent = eventEmitter.getDdlEvents().get(2);
+    Assert.assertEquals(DDLOperation.CREATE_TABLE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
+    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
+    Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
+    Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
+
+    DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
+    Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
+    Assert.assertEquals(DB, dmlEvent.getDatabase());
+    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
+    StructuredRecord row = dmlEvent.getRow();
+    StructuredRecord expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
+      .set("id", 0)
+      .set("name", "alice")
+      .setDate("bday", LocalDate.ofEpochDay(0))
+      .build();
+    Assert.assertEquals(expected, row);
+
+    dmlEvent = eventEmitter.getDmlEvents().get(1);
+    Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
+    Assert.assertEquals(DB, dmlEvent.getDatabase());
+    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
+    row = dmlEvent.getRow();
+    expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
+      .set("id", 1)
+      .set("name", "bob")
+      .setDate("bday", LocalDate.ofEpochDay(365))
+      .build();
+    Assert.assertEquals(expected, row);
+  }
+
+  @Test
+  public void testIgnoreDropsDuringSnapshot() throws Exception {
+    SourceTable sourceTable = new SourceTable(DB, CUSTOMERS_TABLE, "dbo",
+                                              Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+
+    DeltaSourceContext context = new MockContext(SQLServerDriver.class);
     MockEventEmitter eventEmitter = new MockEventEmitter(4);
     SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
-                                                 DB, null, "mssql");
+                                                 DB, null, "mssql", false);
 
     SqlServerEventReader eventReader = new SqlServerEventReader(Collections.singleton(sourceTable), config,
                                                                 context, eventEmitter);
@@ -152,16 +213,15 @@ public class SqlServerEventReaderIntegrationTest {
     Assert.assertEquals(2, eventEmitter.getDmlEvents().size());
 
     DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
-    Assert.assertEquals(DDLOperation.DROP_TABLE, ddlEvent.getOperation());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
-    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
-
-    ddlEvent = eventEmitter.getDdlEvents().get(1);
     Assert.assertEquals(DDLOperation.CREATE_TABLE, ddlEvent.getOperation());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
     Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
     Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
+    
+    ddlEvent = eventEmitter.getDdlEvents().get(1);
+    Assert.assertEquals(DDLOperation.CREATE_DATABASE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
 
     DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
     Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());

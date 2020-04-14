@@ -54,16 +54,19 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final MySqlValueConverters mySqlValueConverters;
   private final Tables tables;
   private final Map<String, SourceTable> sourceTableMap;
+  private final boolean dropDuringSnapshot;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
                              DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
-                             Tables tables, Map<String, SourceTable> sourceTableMap) {
+                             Tables tables, Map<String, SourceTable> sourceTableMap,
+                             boolean dropDuringSnapshot) {
     this.context = context;
     this.emitter = emitter;
     this.ddlParser = ddlParser;
     this.mySqlValueConverters = mySqlValueConverters;
     this.tables = tables;
     this.sourceTableMap = sourceTableMap;
+    this.dropDuringSnapshot = dropDuringSnapshot;
   }
 
   @Override
@@ -164,6 +167,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
               }
               break;
             case DROP_TABLE:
+              if (!dropDuringSnapshot && isSnapshot) {
+                break;
+              }
               DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
               sourceTable = getSourceTable(database, droppedEvent.tableId().table());
               if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.DROP_TABLE)) {
@@ -187,6 +193,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
               }
               break;
             case DROP_DATABASE:
+              if (!dropDuringSnapshot && isSnapshot) {
+                break;
+              }
               emitter.emit(builder.setOperation(DDLOperation.DROP_DATABASE).build());
               break;
             case CREATE_DATABASE:

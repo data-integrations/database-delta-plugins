@@ -60,6 +60,22 @@
           "widget-attributes": {
             "default": "UTC"
           }
+        },
+        {
+          "name": "dropDuringSnapshot",
+          "label": "Drop Tables During Snapshot",
+          "widget-type": "toggle",
+          "widget-attributes": {
+            "default": "false",
+            "on": {
+              "value": "true",
+              "label": "True"
+            },
+            "off": {
+              "value": "false",
+              "label": "False"
+            }
+          }
         }
       ]
     }

@@ -52,6 +52,10 @@ public class MySqlConfig extends PluginConfig {
   @Description("Name of the jdbc plugin to use.")
   private String jdbcPluginName;
 
+  @Nullable
+  @Description("Whether to emit drop database and drop table events during the snapshot phase.")
+  private Boolean dropDuringSnapshot;
+
   public MySqlConfig(String host, int port, String user, String password, int consumerID,
                      String database, @Nullable String serverTimezone) {
     this.host = host;
@@ -97,5 +101,9 @@ public class MySqlConfig extends PluginConfig {
 
   public String getJDBCPluginId() {
     return String.format("%s.%s.%s", "mysqlsource", "jbdc", jdbcPluginName);
+  }
+
+  public boolean shouldDropDuringSnapshot() {
+    return dropDuringSnapshot == null ? false : dropDuringSnapshot;
   }
 }

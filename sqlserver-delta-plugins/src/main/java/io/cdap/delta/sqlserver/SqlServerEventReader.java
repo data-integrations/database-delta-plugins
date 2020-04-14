@@ -109,7 +109,8 @@ public class SqlServerEventReader implements EventReader {
     try {
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sourceTableMap,
+                                               config.shouldDropDuringSnapshot()))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();
