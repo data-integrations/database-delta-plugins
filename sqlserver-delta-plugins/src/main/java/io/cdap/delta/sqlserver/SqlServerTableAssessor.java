@@ -41,6 +41,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
   static final String TYPE_NAME = "TYPE_NAME";
   private static final String GEOMETRY = "GEOMETRY";
   private static final String GEOGRAPHY = "GEOGRAPHY";
+  private static final String DATETIME2 = "DATETIME2";
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -56,6 +57,8 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
   static ColumnEvaluation evaluateColumn(ColumnDetail detail) throws IllegalArgumentException {
     Schema schema;
     int sqlType = detail.getType().getVendorTypeNumber();
+    Map<String, String> properties = detail.getProperties();
+    String upperCaseTypeName = properties.get(TYPE_NAME).toUpperCase();
     ColumnSupport support = ColumnSupport.YES;
     ColumnSuggestion suggestion = null;
     switch (sqlType) {
@@ -80,7 +83,6 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
 
       case Types.NUMERIC:
       case Types.DECIMAL:
-        Map<String, String> properties = detail.getProperties();
         // For numeric/decimal columns, this 'COLUMN_LENGTH' represents the precision
         int precision = Integer.parseInt(properties.get(COLUMN_LENGTH));
         int scale = Integer.parseInt(properties.get(SCALE));
@@ -106,18 +108,19 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
         schema = Schema.of(Schema.LogicalType.TIME_MICROS);
         break;
       case Types.TIMESTAMP:
-        support = ColumnSupport.PARTIAL;
-        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds " +
-                                            "if the sql server type is Datatime2",
-                                          Collections.emptyList());
-        schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        if (DATETIME2.equals(upperCaseTypeName)) {
+          support = ColumnSupport.PARTIAL;
+          suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
+                                            Collections.emptyList());
+          schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        } else {
+          schema = Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS);
+        }
         break;
 
       case Types.BINARY:
       case Types.VARBINARY:
       case Types.LONGVARBINARY:
-        properties = detail.getProperties();
-        String upperCaseTypeName = properties.get(TYPE_NAME).toUpperCase();
         if (GEOGRAPHY.equals(upperCaseTypeName) || GEOMETRY.equals(upperCaseTypeName)) {
           support = ColumnSupport.NO;
           suggestion = new ColumnSuggestion("Unsupported SQL Server Type: " + upperCaseTypeName,
