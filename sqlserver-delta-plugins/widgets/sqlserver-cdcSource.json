@@ -15,7 +15,10 @@
         {
           "name": "port",
           "label": "Port",
-          "widget-type": "textbox"
+          "widget-type": "textbox",
+          "widget-attributes": {
+            "default": "1433"
+          }
         },
         {
           "name": "database",
