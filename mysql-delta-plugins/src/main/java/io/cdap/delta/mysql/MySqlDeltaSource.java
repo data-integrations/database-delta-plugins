@@ -69,8 +69,7 @@ public class MySqlDeltaSource implements DeltaSource {
       throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
     }
     try {
-      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(
-        jdbcDriverClass, String.format("jdbc:mysql://%s:%d/%s", conf.getHost(), conf.getPort(), conf.getDatabase()));
+      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(jdbcDriverClass, conf.getJdbcURL());
       return new MySqlTableRegistry(conf, cleanup);
     } catch (Exception e) {
       throw new RuntimeException("Unable to instantiate JDBC driver", e);
@@ -79,6 +78,6 @@ public class MySqlDeltaSource implements DeltaSource {
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
-    return new MySqlTableAssessor();
+    return new MySqlTableAssessor(conf);
   }
 }

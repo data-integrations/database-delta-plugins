@@ -17,15 +17,21 @@
 package io.cdap.delta.mysql;
 
 import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.delta.api.assessment.Assessment;
 import io.cdap.delta.api.assessment.ColumnAssessment;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSuggestion;
 import io.cdap.delta.api.assessment.ColumnSupport;
+import io.cdap.delta.api.assessment.Problem;
 import io.cdap.delta.api.assessment.TableAssessment;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.plugin.common.ColumnEvaluation;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,6 +44,22 @@ import java.util.Map;
 public class MySqlTableAssessor implements TableAssessor<TableDetail> {
   static final String COLUMN_LENGTH = "COLUMN_LENGTH";
   static final String SCALE = "SCALE";
+
+  private final Assessment generalAssessment;
+  private final MySqlConfig conf;
+
+  MySqlTableAssessor(MySqlConfig conf) {
+    this.conf = conf;
+    List<Problem> featureProblems = new ArrayList<>();
+    checkReplicationPermission(featureProblems, "Repl_slave_priv", "REPLICATION SLAVE");
+    checkReplicationPermission(featureProblems, "Repl_client_priv", "REPLICATION CLIENT");
+    this.generalAssessment = new Assessment(featureProblems, Collections.emptyList());
+  }
+
+  @Override
+  public Assessment assess() {
+    return generalAssessment;
+  }
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -125,5 +147,33 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
       .setSuggestion(suggestion)
       .build();
     return new ColumnEvaluation(field, assessment);
+  }
+
+  private void checkReplicationPermission(List<Problem> featureProblems, String columnName, String permissionName) {
+    String query = String.format("SELECT %s FROM mysql.user WHERE User = '%s' AND Host = '%s'", columnName,
+                                 conf.getUser(), conf.getHost());
+    try (Connection connection = DriverManager.getConnection(conf.getJdbcURL(), conf.getConnectionProperties());
+         Statement statement = connection.createStatement();
+         ResultSet rs = statement.executeQuery(query)) {
+      if (rs.next()) {
+        // if permission is not granted, then the column result should be false
+        if (!rs.getBoolean(columnName)) {
+          featureProblems.add(
+            new Problem("Table Replication Permission Not Granted",
+                        String.format("The '%s' permission is not granted for user '%s' on db host '%s'",
+                                      permissionName, conf.getUser(), conf.getHost()),
+                        "Check the table permission grant",
+                        "The accounts that are used by slave servers were not able to connect to the current " +
+                          "server as their master"));
+        }
+      }
+    } catch (Exception e) {
+      featureProblems.add(
+        new Problem("Unable To Check Replication Permission Was Granted",
+                    String.format("Unable to check if '%s' permission was granted for user '%s' on db host '%s' or not",
+                                  permissionName, conf.getUser(), conf.getDatabase()),
+                    "Check database connectivity and user permission",
+                    null));
+    }
   }
 }
