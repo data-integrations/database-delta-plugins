@@ -39,9 +39,11 @@ A MySQL user must be defined with all the following permissions on any database 
 **SELECT**, **RELOAD**, **SHOW DATABASES**, **REPLICATION SLAVE** and **REPLICATION CLIENT**.
 ```
 mysql> CREATE USER 'user'@'localhost' IDENTIFIED BY 'password';
-mysql> GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user' IDENTIFIED BY 'password';
+mysql> GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user' IDENTIFIED WITH mysql_native_password BY 'password';
 mysql> FLUSH PRIVILEGES;
 ```
+
+
 
 Setting up JDBC Driver
 -----------
@@ -66,3 +68,21 @@ slave that is replicating from the server.
 **Database:** Database to consume events for.
 
 **JDBC Plugin Name:** Name of the jdbc driver to use.
+
+Troubleshooting
+-----------
+If the replicator is able to start snapshotting the data, but fails when it switches over to read from the 
+binlog with errors in the log like:
+
+```
+Caused by: com.github.shyiko.mysql.binlog.network.AuthenticationException: Client does not support authentication protocol requested by server; consider upgrading MySQL client
+```
+
+This is most likely caused by the replication user using an incompatible password type. This is especially
+common starting from MySQL 8 on up. To fix this, run the following command:
+
+```
+ALTER USER '[user]'@'[host]' IDENTIFIED WITH mysql_native_password BY '[password]'
+```
+
+to change the user to use a mysql native password.
