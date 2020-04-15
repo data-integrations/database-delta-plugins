@@ -34,17 +34,17 @@
           }
         },
         {
-          "name": "database",
-          "label": "Database Name",
-          "widget-type": "textbox"
-        },
-        {
           "name": "jdbcPluginName",
           "label": "JDBC Plugin Name",
           "widget-type": "plugin-list",
           "widget-attributes": {
             "plugin-type": "jdbc"
           }
+        },
+        {
+          "name": "database",
+          "label": "Database Name",
+          "widget-type": "textbox"
         }
       ]
     },
