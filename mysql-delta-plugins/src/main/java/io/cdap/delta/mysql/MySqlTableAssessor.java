@@ -171,6 +171,9 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
          ResultSet rs = statement.executeQuery(query)) {
       if (rs.next()) {
         String grants = rs.getString(1);
+
+        // Avoid potential NPE in case the connection was accidentally closed by database before the value is read,
+        // though it will happen very rarely
         if (grants == null) {
           featureProblems.add(permissionUnknownProblem);
           return;
