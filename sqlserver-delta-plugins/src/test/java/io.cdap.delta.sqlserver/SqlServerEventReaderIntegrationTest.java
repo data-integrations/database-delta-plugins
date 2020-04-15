@@ -137,7 +137,7 @@ public class SqlServerEventReaderIntegrationTest {
                                               Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
 
     DeltaSourceContext context = new MockContext(SQLServerDriver.class);
-    MockEventEmitter eventEmitter = new MockEventEmitter(4);
+    MockEventEmitter eventEmitter = new MockEventEmitter(5);
     SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
                                                  DB, null, "mssql");
 
@@ -148,7 +148,7 @@ public class SqlServerEventReaderIntegrationTest {
 
     eventEmitter.waitForExpectedEvents(30, TimeUnit.SECONDS);
 
-    Assert.assertEquals(2, eventEmitter.getDdlEvents().size());
+    Assert.assertEquals(3, eventEmitter.getDdlEvents().size());
     Assert.assertEquals(2, eventEmitter.getDmlEvents().size());
 
     DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
@@ -157,6 +157,10 @@ public class SqlServerEventReaderIntegrationTest {
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
 
     ddlEvent = eventEmitter.getDdlEvents().get(1);
+    Assert.assertEquals(DDLOperation.CREATE_DATABASE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
+
+    ddlEvent = eventEmitter.getDdlEvents().get(2);
     Assert.assertEquals(DDLOperation.CREATE_TABLE, ddlEvent.getOperation());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
