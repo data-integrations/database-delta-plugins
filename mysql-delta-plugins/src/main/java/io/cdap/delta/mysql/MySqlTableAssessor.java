@@ -47,8 +47,8 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
   static final String COLUMN_LENGTH = "COLUMN_LENGTH";
   static final String SCALE = "SCALE";
 
-  private final DriverCleanup driverCleanup;
   private final MySqlConfig conf;
+  private final DriverCleanup driverCleanup;
 
   MySqlTableAssessor(MySqlConfig conf, DriverCleanup driverCleanup) {
     this.conf = conf;
@@ -188,8 +188,7 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
                                         conf.getUser(), conf.getHost()),
                           String.format("Grant '%s' permission to user '%s'@'%s'", permission,
                                         conf.getUser(), conf.getHost()),
-                          "The accounts that are used by slave servers were not able to connect to the " +
-                            "current server as their master"));
+                          "Will not be able to read replication events after the initial snapshot completes."));
           }
         }
       }

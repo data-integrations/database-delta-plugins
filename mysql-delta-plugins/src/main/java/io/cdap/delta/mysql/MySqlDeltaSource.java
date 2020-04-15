@@ -62,24 +62,16 @@ public class MySqlDeltaSource implements DeltaSource {
   }
 
   @Override
-  public TableRegistry createTableRegistry(Configurer configurer) {
-    Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
-                                                                        conf.getJDBCPluginId() + "." +
-                                                                          UUID.randomUUID().toString(),
-                                                                        PluginProperties.builder().build());
-    if (jdbcDriverClass == null) {
-      throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
-    }
-    try {
-      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(jdbcDriverClass, conf.getJdbcURL());
-      return new MySqlTableRegistry(conf, cleanup);
-    } catch (Exception e) {
-      throw new RuntimeException("Unable to instantiate JDBC driver", e);
-    }
+  public TableRegistry createTableRegistry(Configurer configurer) throws Exception {
+    return new MySqlTableRegistry(conf, getDriverCleanup(configurer));
   }
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
+    return new MySqlTableAssessor(conf, getDriverCleanup(configurer));
+  }
+
+  private DriverCleanup getDriverCleanup(Configurer configurer) throws Exception {
     Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
                                                                         conf.getJDBCPluginId() + "." +
                                                                           UUID.randomUUID().toString(),
@@ -87,11 +79,7 @@ public class MySqlDeltaSource implements DeltaSource {
     if (jdbcDriverClass == null) {
       throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
     }
-    try {
-      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(jdbcDriverClass, conf.getJdbcURL());
-      return new MySqlTableAssessor(conf, cleanup);
-    } catch (Exception e) {
-      throw new RuntimeException("Unable to instantiate JDBC driver", e);
-    }
+
+    return DriverCleanup.ensureJDBCDriverIsAvailable(jdbcDriverClass, conf.getJdbcURL());
   }
 }
