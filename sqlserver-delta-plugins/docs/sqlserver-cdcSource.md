@@ -8,7 +8,9 @@ Microsoft SQL Server CDC Source will replicate all of the row-level changes in t
 Setting up Microsoft SQL Server
 -----------
 #### Enable CDC On Database
-Enable CDC for database 'MyDB' will look similar like this:
+* Make sure you have the required permissions by following this [link](https://docs.microsoft.com/en-us/sql/integration-services/change-data-capture/sql-server-connection-required-permissions-for-the-cdc-designer?view=sql-server-ver15).
+
+* Enable CDC for database 'MyDB' will look similar like this:
 ```
 -- ====
 -- Enable Database for CDC template
