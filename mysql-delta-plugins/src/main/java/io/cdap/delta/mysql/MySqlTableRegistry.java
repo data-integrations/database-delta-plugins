@@ -40,7 +40,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 
 /**
  * Lists and describes tables.
@@ -48,21 +47,17 @@ import java.util.Properties;
 public class MySqlTableRegistry implements TableRegistry {
   private final MySqlConfig conf;
   private final DriverCleanup driverCleanup;
-  private final Properties properties;
 
   public MySqlTableRegistry(MySqlConfig conf, DriverCleanup driverCleanup) {
     this.conf = conf;
     this.driverCleanup = driverCleanup;
-    this.properties = new Properties();
-    properties.put("user", conf.getUser());
-    properties.put("password", conf.getPassword());
-    properties.put("serverTimezone", conf.getServerTimezone());
   }
 
   @Override
   public TableList listTables() throws IOException {
     List<TableSummary> tables = new ArrayList<>();
-    try (Connection connection = DriverManager.getConnection(getConnectionString(conf.getDatabase()), properties)) {
+    try (Connection connection = DriverManager.getConnection(getConnectionString(conf.getDatabase()),
+                                                             conf.getConnectionProperties())) {
       DatabaseMetaData dbMeta = connection.getMetaData();
       try (ResultSet tableResults = dbMeta.getTables(null, null, null, null)) {
         while (tableResults.next()) {
@@ -85,7 +80,7 @@ public class MySqlTableRegistry implements TableRegistry {
 
   @Override
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
-    try (Connection connection = DriverManager.getConnection(getConnectionString(db), properties)) {
+    try (Connection connection = DriverManager.getConnection(getConnectionString(db), conf.getConnectionProperties())) {
       DatabaseMetaData dbMeta = connection.getMetaData();
       TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, table)
         .orElseThrow(() -> new TableNotFoundException(db, table, ""));

@@ -60,20 +60,17 @@ public class SqlServerDeltaSource implements DeltaSource {
   }
 
   @Override
-  public TableRegistry createTableRegistry(Configurer configurer) {
+  public TableRegistry createTableRegistry(Configurer configurer) throws Exception {
     Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", config.getJdbcPluginName(),
                                                                         config.getJDBCPluginId(),
                                                                         PluginProperties.builder().build());
     if (jdbcDriverClass == null) {
       throw new IllegalArgumentException("JDBC plugin " + config.getJdbcPluginName() + " not found.");
     }
-    try {
-      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(
-        jdbcDriverClass, String.format("jdbc:sqlserver://%s:%d", config.getHost(), config.getPort()));
-      return new SqlServerTableRegistry(config, cleanup);
-    } catch (Exception e) {
-      throw new RuntimeException("Unable to instantiate JDBC driver", e);
-    }
+
+    DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(
+      jdbcDriverClass, String.format("jdbc:sqlserver://%s:%d", config.getHost(), config.getPort()));
+    return new SqlServerTableRegistry(config, cleanup);
   }
 
   @Override

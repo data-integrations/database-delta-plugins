@@ -20,6 +20,7 @@ import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.plugin.PluginConfig;
 
+import java.util.Properties;
 import javax.annotation.Nullable;
 
 /**
@@ -97,5 +98,17 @@ public class MySqlConfig extends PluginConfig {
 
   public String getJDBCPluginId() {
     return String.format("%s.%s.%s", "mysqlsource", "jbdc", jdbcPluginName);
+  }
+
+  public String getJdbcURL() {
+    return String.format("jdbc:mysql://%s:%d/%s", host, port, database);
+  }
+
+  public Properties getConnectionProperties() {
+    Properties properties = new Properties();
+    properties.put("user", user);
+    properties.put("password", password);
+    properties.put("serverTimezone", getServerTimezone());
+    return properties;
   }
 }

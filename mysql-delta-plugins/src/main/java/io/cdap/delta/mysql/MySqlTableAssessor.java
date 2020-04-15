@@ -17,15 +17,23 @@
 package io.cdap.delta.mysql;
 
 import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.delta.api.assessment.Assessment;
 import io.cdap.delta.api.assessment.ColumnAssessment;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSuggestion;
 import io.cdap.delta.api.assessment.ColumnSupport;
+import io.cdap.delta.api.assessment.Problem;
 import io.cdap.delta.api.assessment.TableAssessment;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.plugin.common.ColumnEvaluation;
+import io.cdap.delta.plugin.common.DriverCleanup;
 
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -38,6 +46,29 @@ import java.util.Map;
 public class MySqlTableAssessor implements TableAssessor<TableDetail> {
   static final String COLUMN_LENGTH = "COLUMN_LENGTH";
   static final String SCALE = "SCALE";
+
+  private final MySqlConfig conf;
+  private final DriverCleanup driverCleanup;
+
+  MySqlTableAssessor(MySqlConfig conf, DriverCleanup driverCleanup) {
+    this.conf = conf;
+    this.driverCleanup = driverCleanup;
+  }
+
+  @Override
+  public Assessment assess() {
+    List<Problem> featureProblems = new ArrayList<>();
+    List<String> permissions = new ArrayList<>();
+    permissions.add("REPLICATION SLAVE");
+    permissions.add("REPLICATION CLIENT");
+    checkReplicationPermissions(featureProblems, permissions);
+    return new Assessment(featureProblems, Collections.emptyList());
+  }
+
+  @Override
+  public void close() throws IOException {
+    driverCleanup.close();
+  }
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -125,5 +156,47 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
       .setSuggestion(suggestion)
       .build();
     return new ColumnEvaluation(field, assessment);
+  }
+
+  private void checkReplicationPermissions(List<Problem> featureProblems, List<String> permissions) {
+    String query = String.format("SHOW GRANTS FOR '%s'@'%s'", conf.getUser(), conf.getHost());
+    Problem permissionUnknownProblem =
+      new Problem("Table Replication Permission Unknown",
+                  String.format("Unable to check if '%s' permissions were granted for user '%s'@'%s' or not",
+                                String.join(",", permissions), conf.getUser(), conf.getHost()),
+                  "Check database connectivity and user permissions",
+                  "Change events might fail to be read after the snapshot phase");
+    try (Connection connection = DriverManager.getConnection(conf.getJdbcURL(), conf.getConnectionProperties());
+         Statement statement = connection.createStatement();
+         ResultSet rs = statement.executeQuery(query)) {
+      if (rs.next()) {
+        String grants = rs.getString(1);
+
+        // Avoid potential NPE in case the connection was accidentally closed by database before the value is read,
+        // though it will happen very rarely
+        if (grants == null) {
+          featureProblems.add(permissionUnknownProblem);
+          return;
+        }
+
+        if (grants.contains("ALL")) {
+          return;
+        }
+
+        for (String permission : permissions) {
+          if (!grants.contains(permission)) {
+            featureProblems.add(
+              new Problem("Table Replication Permission Not Granted",
+                          String.format("The '%s' permission is not granted for user '%s'@'%s'", permission,
+                                        conf.getUser(), conf.getHost()),
+                          String.format("Grant '%s' permission to user '%s'@'%s'", permission,
+                                        conf.getUser(), conf.getHost()),
+                          "Will not be able to read replication events after the initial snapshot completes."));
+          }
+        }
+      }
+    } catch (Exception e) {
+      featureProblems.add(permissionUnknownProblem);
+    }
   }
 }
