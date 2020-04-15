@@ -27,7 +27,9 @@ import io.cdap.delta.api.assessment.TableAssessment;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.plugin.common.ColumnEvaluation;
+import io.cdap.delta.plugin.common.DriverCleanup;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -45,20 +47,27 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
   static final String COLUMN_LENGTH = "COLUMN_LENGTH";
   static final String SCALE = "SCALE";
 
-  private final Assessment generalAssessment;
+  private final DriverCleanup driverCleanup;
   private final MySqlConfig conf;
 
-  MySqlTableAssessor(MySqlConfig conf) {
+  MySqlTableAssessor(MySqlConfig conf, DriverCleanup driverCleanup) {
     this.conf = conf;
-    List<Problem> featureProblems = new ArrayList<>();
-    checkReplicationPermission(featureProblems, "Repl_slave_priv", "REPLICATION SLAVE");
-    checkReplicationPermission(featureProblems, "Repl_client_priv", "REPLICATION CLIENT");
-    this.generalAssessment = new Assessment(featureProblems, Collections.emptyList());
+    this.driverCleanup = driverCleanup;
   }
 
   @Override
   public Assessment assess() {
-    return generalAssessment;
+    List<Problem> featureProblems = new ArrayList<>();
+    List<String> permissions = new ArrayList<>();
+    permissions.add("REPLICATION SLAVE");
+    permissions.add("REPLICATION CLIENT");
+    checkReplicationPermissions(featureProblems, permissions);
+    return new Assessment(featureProblems, Collections.emptyList());
+  }
+
+  @Override
+  public void close() throws IOException {
+    driverCleanup.close();
   }
 
   @Override
@@ -149,31 +158,43 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
     return new ColumnEvaluation(field, assessment);
   }
 
-  private void checkReplicationPermission(List<Problem> featureProblems, String columnName, String permissionName) {
-    String query = String.format("SELECT %s FROM mysql.user WHERE User = '%s' AND Host = '%s'", columnName,
-                                 conf.getUser(), conf.getHost());
+  private void checkReplicationPermissions(List<Problem> featureProblems, List<String> permissions) {
+    String query = String.format("SHOW GRANTS FOR '%s'@'%s'", conf.getUser(), conf.getHost());
+    Problem permissionUnknownProblem =
+      new Problem("Table Replication Permission Unknown",
+                  String.format("Unable to check if '%s' permissions were granted for user '%s'@'%s' or not",
+                                String.join(",", permissions), conf.getUser(), conf.getHost()),
+                  "Check database connectivity and user permissions",
+                  "Change events might fail to be read after the snapshot phase");
     try (Connection connection = DriverManager.getConnection(conf.getJdbcURL(), conf.getConnectionProperties());
          Statement statement = connection.createStatement();
          ResultSet rs = statement.executeQuery(query)) {
       if (rs.next()) {
-        // if permission is not granted, then the column result should be false
-        if (!rs.getBoolean(columnName)) {
-          featureProblems.add(
-            new Problem("Table Replication Permission Not Granted",
-                        String.format("The '%s' permission is not granted for user '%s' on db host '%s'",
-                                      permissionName, conf.getUser(), conf.getHost()),
-                        "Check the table permission grant",
-                        "The accounts that are used by slave servers were not able to connect to the current " +
-                          "server as their master"));
+        String grants = rs.getString(1);
+        if (grants == null) {
+          featureProblems.add(permissionUnknownProblem);
+          return;
+        }
+
+        if (grants.contains("ALL")) {
+          return;
+        }
+
+        for (String permission : permissions) {
+          if (!grants.contains(permission)) {
+            featureProblems.add(
+              new Problem("Table Replication Permission Not Granted",
+                          String.format("The '%s' permission is not granted for user '%s'@'%s'", permission,
+                                        conf.getUser(), conf.getHost()),
+                          String.format("Grant '%s' permission to user '%s'@'%s'", permission,
+                                        conf.getUser(), conf.getHost()),
+                          "The accounts that are used by slave servers were not able to connect to the " +
+                            "current server as their master"));
+          }
         }
       }
     } catch (Exception e) {
-      featureProblems.add(
-        new Problem("Unable To Check Replication Permission Was Granted",
-                    String.format("Unable to check if '%s' permission was granted for user '%s' on db host '%s' or not",
-                                  permissionName, conf.getUser(), conf.getDatabase()),
-                    "Check database connectivity and user permission",
-                    null));
+      featureProblems.add(permissionUnknownProblem);
     }
   }
 }

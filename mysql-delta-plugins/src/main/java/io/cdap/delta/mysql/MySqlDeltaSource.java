@@ -32,6 +32,7 @@ import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.plugin.common.DriverCleanup;
 
 import java.sql.Driver;
+import java.util.UUID;
 
 /**
  * Mysql origin.
@@ -63,7 +64,8 @@ public class MySqlDeltaSource implements DeltaSource {
   @Override
   public TableRegistry createTableRegistry(Configurer configurer) {
     Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
-                                                                        conf.getJDBCPluginId(),
+                                                                        conf.getJDBCPluginId() + "." +
+                                                                          UUID.randomUUID().toString(),
                                                                         PluginProperties.builder().build());
     if (jdbcDriverClass == null) {
       throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
@@ -78,6 +80,18 @@ public class MySqlDeltaSource implements DeltaSource {
 
   @Override
   public TableAssessor<TableDetail> createTableAssessor(Configurer configurer) throws Exception {
-    return new MySqlTableAssessor(conf);
+    Class<? extends Driver> jdbcDriverClass = configurer.usePluginClass("jdbc", conf.getJdbcPluginName(),
+                                                                        conf.getJDBCPluginId() + "." +
+                                                                          UUID.randomUUID().toString(),
+                                                                        PluginProperties.builder().build());
+    if (jdbcDriverClass == null) {
+      throw new IllegalArgumentException("JDBC plugin " + conf.getJdbcPluginName() + " not found.");
+    }
+    try {
+      DriverCleanup cleanup = DriverCleanup.ensureJDBCDriverIsAvailable(jdbcDriverClass, conf.getJdbcURL());
+      return new MySqlTableAssessor(conf, cleanup);
+    } catch (Exception e) {
+      throw new RuntimeException("Unable to instantiate JDBC driver", e);
+    }
   }
 }
