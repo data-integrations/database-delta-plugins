@@ -30,7 +30,6 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.mock.BlockingEventEmitter;
 import io.cdap.delta.plugin.mock.MockContext;
 import io.cdap.delta.plugin.mock.MockEventEmitter;
-import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -46,6 +45,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -202,8 +202,8 @@ public class SqlServerEventReaderIntegrationTest {
                                               Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
 
     DeltaSourceContext context = new MockContext(SQLServerDriver.class);
-    BlockingQueue<DDLEvent> ddlEvents = new BlockingArrayQueue<>(1);
-    BlockingQueue<DMLEvent> dmlEvents = new BlockingArrayQueue<>(1);
+    BlockingQueue<DDLEvent> ddlEvents = new ArrayBlockingQueue<>(1);
+    BlockingQueue<DMLEvent> dmlEvents = new ArrayBlockingQueue<>(1);
     EventEmitter eventEmitter = new BlockingEventEmitter(ddlEvents, dmlEvents);
     SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
                                                  DB, null, "mssql");
@@ -213,9 +213,16 @@ public class SqlServerEventReaderIntegrationTest {
 
     eventReader.start(new Offset());
 
-    while (ddlEvents.size() < 1) {
-      TimeUnit.MILLISECONDS.sleep(10);
+    int count = 0;
+    while (ddlEvents.size() < 1 && count < 100) {
+      TimeUnit.MILLISECONDS.sleep(50);
+      count++;
     }
+
+    if (count >= 100) {
+      Assert.fail("Reader never emitted any events.");
+    }
+
     eventReader.stop();
     Assert.assertFalse(eventReader.failedToStop());
   }

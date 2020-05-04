@@ -16,6 +16,7 @@
 
 package io.cdap.delta.mysql;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.cdap.delta.api.DeltaFailureException;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
@@ -61,6 +62,7 @@ public class MySqlEventReader implements EventReader {
   private final DeltaSourceContext context;
   private final Set<SourceTable> sourceTables;
   private EmbeddedEngine engine;
+  private volatile boolean failedToStop;
 
   public MySqlEventReader(Set<SourceTable> sourceTables, MySqlConfig config,
                           DeltaSourceContext context, EventEmitter emitter) {
@@ -69,6 +71,7 @@ public class MySqlEventReader implements EventReader {
     this.context = context;
     this.emitter = emitter;
     this.executorService = Executors.newSingleThreadScheduledExecutor();
+    this.failedToStop = false;
   }
 
   @Override
@@ -151,7 +154,13 @@ public class MySqlEventReader implements EventReader {
     executorService.shutdownNow();
     if (!executorService.awaitTermination(2, TimeUnit.MINUTES)) {
       LOG.warn("Unable to cleanly shutdown reader within the timeout.");
+      failedToStop = true;
     }
+  }
+
+  @VisibleForTesting
+  boolean failedToStop() {
+    return failedToStop;
   }
 
   private static MySqlValueConverters getValueConverters(MySqlConnectorConfig configuration) {

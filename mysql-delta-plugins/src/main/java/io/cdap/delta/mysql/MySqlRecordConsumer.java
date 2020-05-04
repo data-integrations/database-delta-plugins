@@ -27,6 +27,7 @@ import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
 import io.debezium.connector.mysql.MySqlValueConverters;
+import io.debezium.embedded.StopConnectorException;
 import io.debezium.relational.Table;
 import io.debezium.relational.TableId;
 import io.debezium.relational.Tables;
@@ -144,9 +145,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
       handleDML(source, val, recordOffset, isSnapshot, readAllTables);
     } catch (InterruptedException e) {
-      LOG.debug("Interrupted while emitting change event.", e);
-      // reset the interrupted flag so that caller knows to interrupt
-      Thread.currentThread().interrupt();
+      // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
+      throw new StopConnectorException("Interrupted while emitting event.");
     }
   }
 
@@ -284,7 +284,14 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             ddlEvent = builder.setOperation(DDLOperation.DROP_DATABASE).build();
             break;
           case CREATE_DATABASE:
-            ddlEvent = builder.setOperation(DDLOperation.CREATE_DATABASE).build();
+            // due to a bug in io.debezium.relational.ddl.AbstractDdlParser#signalDropDatabase
+            // a DROP_DATABASE event will be mistakenly categorized as a CREATE_DATABASE event.
+            // TODO: check if this is fixed in a newer debezium version
+            if (event.statement() != null && event.statement().startsWith("DROP DATABASE")) {
+              ddlEvent = builder.setOperation(DDLOperation.DROP_DATABASE).build();
+            } else {
+              ddlEvent = builder.setOperation(DDLOperation.CREATE_DATABASE).build();
+            }
             break;
           case TRUNCATE_TABLE:
             DdlParserListener.TableTruncatedEvent truncatedEvent =
