@@ -63,6 +63,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     this.databaseName = databaseName;
     this.trackingTables = new HashSet<>();
     this.sourceTableMap = sourceTableMap;
+    LOG.info("created new record consumer.");
   }
 
   @Override
@@ -79,7 +80,14 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     Map<String, String> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
+    Object snapshotVal = sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY);
+    LOG.info("snapshot val = {}", snapshotVal);
+
     boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
+    LOG.info("{}, offset:", this);
+    for (Map.Entry<String, String> entry : deltaOffset.entrySet()) {
+      LOG.info(" {} = {}", entry.getKey(), entry.getValue());
+    }
 
     DMLOperation op;
     String opStr = val.get("op");
@@ -138,6 +146,8 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
+    LOG.info("isSnapshot = {}", isSnapshot);
+    LOG.info("tracking tables has {} elements, = {}", trackingTables.size(), trackingTables);
     // send the ddl event if the first see the table and the it is in snapshot.
     // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
     if (!trackingTables.contains(trackingTable) && isSnapshot) {
@@ -147,19 +157,25 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
 
-      // try to always drop the table before snapshot the schema.
-      emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
-                     .setTable(tableName)
-                     .build());
+      try {
+        // try to always drop the table before snapshot the schema.
+        emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
+                       .setTable(tableName)
+                       .build());
 
-      // try to emit create database event before create table event
-      emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
+        // try to emit create database event before create table event
+        emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
 
-      emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
-                     .setTable(tableName)
-                     .setSchema(schema)
-                     .setPrimaryKey(primaryFields)
-                     .build());
+        emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
+                       .setTable(tableName)
+                       .setSchema(schema)
+                       .setPrimaryKey(primaryFields)
+                       .build());
+      } catch (InterruptedException e) {
+        LOG.debug("Interrupted while emitting change event.", e);
+        Thread.currentThread().interrupt();
+        return;
+      }
       trackingTables.add(trackingTable);
     }
 
@@ -167,7 +183,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       // do nothing due to it was not set to read all tables and the DML op has been blacklisted for this table
       return;
     }
-    
+
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder dmlBuilder = DMLEvent.builder()
       .setOffset(recordOffset)
@@ -184,6 +200,11 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       dmlBuilder.setPreviousRow(before);
     }
 
-    emitter.emit(dmlBuilder.build());
+    try {
+      emitter.emit(dmlBuilder.build());
+    } catch (InterruptedException e) {
+      LOG.debug("Interrupted while emitting change event.", e);
+      Thread.currentThread().interrupt();
+    }
   }
 }

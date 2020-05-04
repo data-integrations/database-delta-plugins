@@ -16,6 +16,7 @@
 
 package io.cdap.delta.sqlserver;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -29,7 +30,10 @@ import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.sql.Driver;
 import java.util.Map;
 import java.util.Set;
@@ -42,11 +46,13 @@ import java.util.stream.Collectors;
  * Sql server event reader
  */
 public class SqlServerEventReader implements EventReader {
+  private static final Logger LOG = LoggerFactory.getLogger(SqlServerEventReader.class);
   private final SqlServerConfig config;
   private final EventEmitter emitter;
   private final DeltaSourceContext context;
   private final ExecutorService executorService;
   private final Set<SourceTable> tables;
+  private volatile boolean failedStopping;
   private EmbeddedEngine engine;
 
   public SqlServerEventReader(Set<SourceTable> tables, SqlServerConfig config,
@@ -56,10 +62,16 @@ public class SqlServerEventReader implements EventReader {
     this.context = context;
     this.tables = tables;
     this.executorService = Executors.newSingleThreadScheduledExecutor();
+    this.failedStopping = false;
   }
 
   @Override
   public void start(Offset offset) {
+
+    LOG.info("starting event reader with offset:");
+    for (Map.Entry<String, String> entry : offset.get().entrySet()) {
+      LOG.info(" {} = {}", entry.getKey(), entry.getValue());
+    }
     // load sql server jdbc driver into class loader and use this loaded jdbc class to set the static factory
     // variable in SqlServerConnection for instantiation purpose later on.
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
@@ -102,11 +114,26 @@ public class SqlServerEventReader implements EventReader {
         .with("database.serverTimezone", config.getServerTimezone())
         .build();
     DBSchemaHistory.deltaRuntimeContext = context;
+    /*
+       this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
+       but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
+       those DDL events unless the DB history is wiped. This only fixes handling of DDL errors that
+       happen during the initial snapshot.
+        TODO: (CDAP-16735) fix this more comprehensively
+     */
+    if (offset.get().isEmpty()) {
+      try {
+        DBSchemaHistory.wipeHistory();
+      } catch (IOException e) {
+        throw new RuntimeException("Unable to wipe schema history at start of replication.", e);
+      }
+    }
 
     ClassLoader oldCL = Thread.currentThread().getContextClassLoader();
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
 
     try {
+      LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
         .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sourceTableMap))
@@ -122,9 +149,15 @@ public class SqlServerEventReader implements EventReader {
 
   @Override
   public void stop() throws InterruptedException {
-    if (engine != null && engine.stop()) {
-      engine.await(1, TimeUnit.MINUTES);
+    executorService.shutdownNow();
+    if (!executorService.awaitTermination(2, TimeUnit.MINUTES)) {
+      failedStopping = true;
+      LOG.warn("Unable to cleanly shutdown reader within the timeout.");
     }
-    executorService.shutdown();
+  }
+
+  @VisibleForTesting
+  boolean failedToStop() {
+    return failedStopping;
   }
 }

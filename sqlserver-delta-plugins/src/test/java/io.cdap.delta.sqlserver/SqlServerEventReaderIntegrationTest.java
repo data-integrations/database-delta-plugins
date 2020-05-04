@@ -24,10 +24,13 @@ import io.cdap.delta.api.DDLOperation;
 import io.cdap.delta.api.DMLEvent;
 import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaSourceContext;
+import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
+import io.cdap.delta.plugin.mock.BlockingEventEmitter;
 import io.cdap.delta.plugin.mock.MockContext;
 import io.cdap.delta.plugin.mock.MockEventEmitter;
+import org.eclipse.jetty.util.BlockingArrayQueue;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -43,6 +46,7 @@ import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -190,5 +194,29 @@ public class SqlServerEventReaderIntegrationTest {
       .setDate("bday", LocalDate.ofEpochDay(365))
       .build();
     Assert.assertEquals(expected, row);
+  }
+
+  @Test
+  public void testEventReaderStop() throws Exception {
+    SourceTable sourceTable = new SourceTable(DB, CUSTOMERS_TABLE, "dbo",
+                                              Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+
+    DeltaSourceContext context = new MockContext(SQLServerDriver.class);
+    BlockingQueue<DDLEvent> ddlEvents = new BlockingArrayQueue<>(1);
+    BlockingQueue<DMLEvent> dmlEvents = new BlockingArrayQueue<>(1);
+    EventEmitter eventEmitter = new BlockingEventEmitter(ddlEvents, dmlEvents);
+    SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
+                                                 DB, null, "mssql");
+
+    SqlServerEventReader eventReader = new SqlServerEventReader(Collections.singleton(sourceTable), config,
+                                                                context, eventEmitter);
+
+    eventReader.start(new Offset());
+
+    while (ddlEvents.size() < 1) {
+      TimeUnit.MILLISECONDS.sleep(10);
+    }
+    eventReader.stop();
+    Assert.assertFalse(eventReader.failedToStop());
   }
 }
