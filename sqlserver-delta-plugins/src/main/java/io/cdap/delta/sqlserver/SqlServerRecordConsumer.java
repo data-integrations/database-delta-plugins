@@ -28,6 +28,7 @@ import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
 import io.debezium.connector.sqlserver.SourceInfo;
+import io.debezium.embedded.StopConnectorException;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
@@ -79,6 +80,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     Map<String, String> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
+
     boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
 
     DMLOperation op;
@@ -147,19 +149,24 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
 
-      // try to always drop the table before snapshot the schema.
-      emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
-                     .setTable(tableName)
-                     .build());
+      try {
+        // try to always drop the table before snapshot the schema.
+        emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
+                       .setTable(tableName)
+                       .build());
 
-      // try to emit create database event before create table event
-      emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
+        // try to emit create database event before create table event
+        emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
 
-      emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
-                     .setTable(tableName)
-                     .setSchema(schema)
-                     .setPrimaryKey(primaryFields)
-                     .build());
+        emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
+                       .setTable(tableName)
+                       .setSchema(schema)
+                       .setPrimaryKey(primaryFields)
+                       .build());
+      } catch (InterruptedException e) {
+        // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
+        throw new StopConnectorException("Interrupted while emitting an event.");
+      }
       trackingTables.add(trackingTable);
     }
 
@@ -167,7 +174,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       // do nothing due to it was not set to read all tables and the DML op has been blacklisted for this table
       return;
     }
-    
+
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder dmlBuilder = DMLEvent.builder()
       .setOffset(recordOffset)
@@ -184,6 +191,11 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       dmlBuilder.setPreviousRow(before);
     }
 
-    emitter.emit(dmlBuilder.build());
+    try {
+      emitter.emit(dmlBuilder.build());
+    } catch (InterruptedException e) {
+      // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
+      throw new StopConnectorException("Interrupted while emitting an event.");
+    }
   }
 }

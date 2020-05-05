@@ -40,6 +40,10 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   private final DocumentWriter writer = DocumentWriter.defaultWriter();
   private final DocumentReader reader = DocumentReader.defaultReader();
 
+  public static void wipeHistory() throws IOException {
+    deltaRuntimeContext.putState(KEY, new byte[] { });
+  }
+
   @Override
   protected synchronized void storeRecord(HistoryRecord record) throws DatabaseHistoryException {
     List<HistoryRecord> history = getHistory();
@@ -79,7 +83,7 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
     List<HistoryRecord> history = new ArrayList<>();
     try {
       byte[] historyBytes = deltaRuntimeContext.getState(KEY);
-      if (historyBytes == null) {
+      if (historyBytes == null || historyBytes.length == 0) {
         return history;
       }
       String historyStr = Bytes.toString(historyBytes);
