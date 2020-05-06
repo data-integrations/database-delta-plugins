@@ -31,14 +31,13 @@ import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
+import io.debezium.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Driver;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -119,8 +118,12 @@ public class SqlServerEventReader implements EventReader {
         .build();
     DBSchemaHistory.deltaRuntimeContext = context;
     String snapshotTables = debeziumConf.getString(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES);
-    Set<String> snapshotTableSet = snapshotTables == null || snapshotTables.isEmpty() ? new HashSet<>() :
-      new HashSet<>(Arrays.asList(snapshotTables.split(",")));
+    Map<String, String> state = new HashMap<>();
+    if (!Strings.isNullOrEmpty(snapshotTables)) {
+      state.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, snapshotTables);
+    }
+    SqlServerOffset sqlServerOffset = new SqlServerOffset(state);
+
     /*
        this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
        but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
@@ -143,7 +146,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTableSet, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sqlServerOffset, sourceTableMap))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();
