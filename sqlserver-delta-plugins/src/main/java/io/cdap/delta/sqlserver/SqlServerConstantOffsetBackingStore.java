@@ -27,8 +27,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The offset store class for sql server. Sql server expects the offset which contains:
- * 1. change_lsn, 2. commit_lsn, 3. snapshot, 4. snapshot_completed. 5. snapshot_tables
+ * The sql server constant offset store class is used by debezium only to retrieve the offset information.
+ * Debezium expects the offset which contains:
+ * 1. change_lsn, 2. commit_lsn, 3. snapshot, 4. snapshot_completed.
  */
 public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   private static final Gson GSON = new Gson();
