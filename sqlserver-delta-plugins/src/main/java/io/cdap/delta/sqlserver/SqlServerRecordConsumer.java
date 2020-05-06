@@ -142,7 +142,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
-    // send the ddl event only if it see the table at the first time
+    // send the ddl events only if we see the table at the first time in both cache and offset
     // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
     if (!trackingTables.contains(trackingTable) && !snapshotTableSet.contains(sourceTableId)) {
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
