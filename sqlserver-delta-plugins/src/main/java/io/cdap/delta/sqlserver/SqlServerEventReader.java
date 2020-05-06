@@ -25,6 +25,7 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
 import io.debezium.config.Configuration;
+import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.connector.sqlserver.SqlServerConnection;
 import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.embedded.EmbeddedEngine;
@@ -35,6 +36,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Driver;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -97,7 +101,7 @@ public class SqlServerEventReader implements EventReader {
                                    .with("connector.class", SqlServerConnector.class.getName())
                                    .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
                                    .with("offset.flush.interval.ms", 1000);
-    SqlServerConstantOffsetBackingStore.deserializeOffsets(offset.get()).forEach(builder::with);
+    convertOffsets(offset.get()).forEach(builder::with);
 
     Configuration debeziumConf =
       builder
@@ -114,6 +118,9 @@ public class SqlServerEventReader implements EventReader {
         .with("database.serverTimezone", config.getServerTimezone())
         .build();
     DBSchemaHistory.deltaRuntimeContext = context;
+    String snapshotTables = debeziumConf.getString(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES);
+    Set<String> snapshotTableSet = snapshotTables == null || snapshotTables.isEmpty() ? new HashSet<>() :
+      new HashSet<>(Arrays.asList(snapshotTables.split(",")));
     /*
        this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
        but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
@@ -136,7 +143,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTableSet, sourceTableMap))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();
@@ -144,7 +151,6 @@ public class SqlServerEventReader implements EventReader {
     } finally {
       Thread.currentThread().setContextClassLoader(oldCL);
     }
-
   }
 
   @Override
@@ -159,5 +165,25 @@ public class SqlServerEventReader implements EventReader {
   @VisibleForTesting
   boolean failedToStop() {
     return failedStopping;
+  }
+
+  // This method is for converting cdap offsets to debezium offsets
+  private Map<String, String> convertOffsets(Map<String, String> offsets) {
+    Map<String, String> offsetConfig = new HashMap<>();
+    String changeLsn = offsets.getOrDefault(SourceInfo.CHANGE_LSN_KEY, null);
+    String commitLsn = offsets.getOrDefault(SourceInfo.COMMIT_LSN_KEY, null);
+    String snapshot = offsets.getOrDefault(SourceInfo.SNAPSHOT_KEY, null);
+    String snapshotCompleted = offsets.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, null);
+    String snapshotTables = offsets.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, null);
+    // this is prevent NPE since the configuration does not allow putting null value,
+    // also WorkerConfig.get() will throw Exception if a configuration is not found, so have to put some value in it
+    offsetConfig.put(SourceInfo.CHANGE_LSN_KEY, changeLsn == null ? "" : changeLsn);
+    offsetConfig.put(SourceInfo.COMMIT_LSN_KEY, commitLsn == null ? "" : commitLsn);
+    offsetConfig.put(SourceInfo.SNAPSHOT_KEY, snapshot == null ? "" : snapshot);
+    offsetConfig.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED,
+                     snapshotCompleted == null ? "" : snapshotCompleted);
+    offsetConfig.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES,
+                     snapshotTables == null ? "" : snapshotTables);
+    return offsetConfig;
   }
 }

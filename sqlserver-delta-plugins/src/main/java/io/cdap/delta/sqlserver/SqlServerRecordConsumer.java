@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -53,16 +54,19 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final EventEmitter emitter;
   // we need this since there is no way to get the db information from the source record
   private final String databaseName;
-  // this is hack to track the tables getting created or not
+  // this is an in-memory cache to track the tables getting created or not
   private final Set<SourceTable> trackingTables;
+  // this is a snapshot tracking table set came from offset
+  private final Set<String> snapshotTableSet;
   private final Map<String, SourceTable> sourceTableMap;
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
-                          Map<String, SourceTable> sourceTableMap) {
+                          Set<String> snapshotTableSet, Map<String, SourceTable> sourceTableMap) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.trackingTables = new HashSet<>();
+    this.snapshotTableSet = snapshotTableSet;
     this.sourceTableMap = sourceTableMap;
   }
 
@@ -77,7 +81,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, String> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
+    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord, snapshotTableSet);
     Offset recordOffset = new Offset(deltaOffset);
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
 
@@ -96,13 +100,12 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    StructuredRecord key = Records.convert((Struct) sourceRecord.key());
-    String recordName = key.getSchema().getRecordName();
-    // the record name will always be like this: [db.server.name].[schema].[table].Envelope
-    if (recordName == null) {
+    String topicName = sourceRecord.topic();
+    // the topic name will always be like this: [db.server.name].[schema].[table]
+    if (topicName == null) {
       return; // safety check to avoid NPE
     }
-    String[] splits = recordName.split("\\.");
+    String[] splits = topicName.split("\\.");
     String schemaName = splits[1];
     String tableName = splits[2];
     String sourceTableId = schemaName + "." + tableName;
@@ -136,18 +139,22 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     SourceTable trackingTable = new SourceTable(databaseName, tableName);
     DDLEvent.Builder builder = DDLEvent.builder()
                                  .setDatabase(databaseName)
-                                 .setOffset(recordOffset)
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
-    // send the ddl event if the first see the table and the it is in snapshot.
+    // send the ddl event only if it see the table at the first time
     // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
-    if (!trackingTables.contains(trackingTable) && isSnapshot) {
+    if (!trackingTables.contains(trackingTable) && !snapshotTableSet.contains(sourceTableId)) {
+      StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();
       if (fields != null && !fields.isEmpty()) {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
+      snapshotTableSet.add(sourceTableId);
+      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, String.join(",", snapshotTableSet));
+      recordOffset = new Offset(deltaOffset);
+      builder.setOffset(recordOffset);
 
       try {
         // try to always drop the table before snapshot the schema.
@@ -197,5 +204,30 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
       throw new StopConnectorException("Interrupted while emitting an event.");
     }
+  }
+
+  private Map<String, String> generateCdapOffsets(SourceRecord sourceRecord, Set<String> snapshotTableSet) {
+    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
+    String changLsn = (String) sourceOffset.get(SourceInfo.CHANGE_LSN_KEY);
+    String commitLsn = (String) sourceOffset.get(SourceInfo.COMMIT_LSN_KEY);
+    Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
+    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    Map<String, String> deltaOffset = new HashMap<>(4);
+    if (changLsn != null) {
+      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, changLsn);
+    }
+    if (commitLsn != null) {
+      deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, commitLsn);
+    }
+    if (snapshot != null) {
+      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, String.valueOf(snapshot));
+    }
+    if (snapshotCompleted != null) {
+      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, String.valueOf(snapshotCompleted));
+    }
+    if (snapshotTableSet != null && !snapshotTableSet.isEmpty()) {
+      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, String.join(",", snapshotTableSet));
+    }
+    return deltaOffset;
   }
 }
