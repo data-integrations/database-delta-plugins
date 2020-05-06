@@ -95,34 +95,38 @@ public class SqlServerEventReader implements EventReader {
           return schema == null ? table : schema + "." + table;
         }, t -> t));
 
+    Map<String, String> state = offset.get(); // this will never be null
     // offset config
-    Configuration.Builder builder = Configuration.create()
-                                   .with("connector.class", SqlServerConnector.class.getName())
-                                   .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
-                                   .with("offset.flush.interval.ms", 1000);
-    convertOffsets(offset.get()).forEach(builder::with);
+    Configuration debeziumConf = Configuration.create()
+      .with("connector.class", SqlServerConnector.class.getName())
+      .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
+      .with("offset.flush.interval.ms", 1000)
+      /* bind offset configs with debeizumConf */
+      .with("change_lsn", state.getOrDefault(SourceInfo.CHANGE_LSN_KEY, ""))
+      .with("commit_lsn", state.getOrDefault(SourceInfo.COMMIT_LSN_KEY, ""))
+      .with("snapshot", state.getOrDefault(SourceInfo.SNAPSHOT_KEY, ""))
+      .with("snapshot_completed", state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, ""))
+      /* begin connector properties */
+      .with("name", "delta")
+      .with("database.hostname", config.getHost())
+      .with("database.port", config.getPort())
+      .with("database.user", config.getUser())
+      .with("database.password", config.getPassword())
+      .with("database.history", DBSchemaHistory.class.getName())
+      .with("database.dbname", databaseName)
+      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
+      .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
+      .with("database.serverTimezone", config.getServerTimezone())
+      .build();
 
-    Configuration debeziumConf =
-      builder
-        /* begin connector properties */
-        .with("name", "delta")
-        .with("database.hostname", config.getHost())
-        .with("database.port", config.getPort())
-        .with("database.user", config.getUser())
-        .with("database.password", config.getPassword())
-        .with("database.history", DBSchemaHistory.class.getName())
-        .with("database.dbname", databaseName)
-        .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
-        .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
-        .with("database.serverTimezone", config.getServerTimezone())
-        .build();
     DBSchemaHistory.deltaRuntimeContext = context;
-    String snapshotTables = debeziumConf.getString(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES);
-    Map<String, String> state = new HashMap<>();
+
+    String snapshotTables = state.get(SqlServerOffset.SNAPSHOT_TABLES);
+    Map<String, String> sqlServerState = new HashMap<>();
     if (!Strings.isNullOrEmpty(snapshotTables)) {
-      state.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, snapshotTables);
+      sqlServerState.put(SqlServerOffset.SNAPSHOT_TABLES, snapshotTables);
     }
-    SqlServerOffset sqlServerOffset = new SqlServerOffset(state);
+    SqlServerOffset sqlServerOffset = new SqlServerOffset(sqlServerState);
 
     /*
        this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
@@ -168,25 +172,5 @@ public class SqlServerEventReader implements EventReader {
   @VisibleForTesting
   boolean failedToStop() {
     return failedStopping;
-  }
-
-  // This method is for converting cdap offsets to debezium offsets
-  private Map<String, String> convertOffsets(Map<String, String> offsets) {
-    Map<String, String> offsetConfig = new HashMap<>();
-    String changeLsn = offsets.getOrDefault(SourceInfo.CHANGE_LSN_KEY, null);
-    String commitLsn = offsets.getOrDefault(SourceInfo.COMMIT_LSN_KEY, null);
-    String snapshot = offsets.getOrDefault(SourceInfo.SNAPSHOT_KEY, null);
-    String snapshotCompleted = offsets.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, null);
-    String snapshotTables = offsets.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, null);
-    // this is prevent NPE since the configuration does not allow putting null value,
-    // also WorkerConfig.get() will throw Exception if a configuration is not found, so have to put some value in it
-    offsetConfig.put(SourceInfo.CHANGE_LSN_KEY, changeLsn == null ? "" : changeLsn);
-    offsetConfig.put(SourceInfo.COMMIT_LSN_KEY, commitLsn == null ? "" : commitLsn);
-    offsetConfig.put(SourceInfo.SNAPSHOT_KEY, snapshot == null ? "" : snapshot);
-    offsetConfig.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED,
-                     snapshotCompleted == null ? "" : snapshotCompleted);
-    offsetConfig.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES,
-                     snapshotTables == null ? "" : snapshotTables);
-    return offsetConfig;
   }
 }

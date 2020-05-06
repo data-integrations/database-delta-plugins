@@ -34,7 +34,6 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
   private static final Gson GSON = new Gson();
   private static final String KEY = "{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}";
   static final String SNAPSHOT_COMPLETED = "snapshot_completed";
-  static final String SNAPSHOT_TABLES = "snapshot_tables";
 
   @Override
   public void configure(WorkerConfig config) {
@@ -45,7 +44,6 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     String commitStr = originalConfig.get(SourceInfo.COMMIT_LSN_KEY);
     String snapshot = originalConfig.get(SourceInfo.SNAPSHOT_KEY);
     String snapshotCompleted = originalConfig.get(SNAPSHOT_COMPLETED);
-    String snapshotTables = originalConfig.get(SNAPSHOT_TABLES);
 
     Map<String, Object> offset = new HashMap<>();
     if (!changeStr.isEmpty()) {
@@ -59,9 +57,6 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     }
     if (!snapshotCompleted.isEmpty()) {
       offset.put(SNAPSHOT_COMPLETED, Boolean.valueOf(snapshotCompleted));
-    }
-    if (!snapshotTables.isEmpty()) {
-      offset.put(SNAPSHOT_TABLES, snapshotTables);
     }
 
     // if this is missing and we add an empty map, for some reason, the connector will still consider there is some

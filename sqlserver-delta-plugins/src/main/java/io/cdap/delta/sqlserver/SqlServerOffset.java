@@ -16,6 +16,11 @@
 
 package io.cdap.delta.sqlserver;
 
+import io.debezium.connector.sqlserver.SourceInfo;
+import io.debezium.util.Strings;
+import org.apache.kafka.connect.source.SourceRecord;
+
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,6 +29,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Record offset information for SqlServer.
  */
 public class SqlServerOffset {
+  static final String SNAPSHOT_TABLES = "snapshot_tables";
+
   private final Map<String, String> state;
 
   public SqlServerOffset() {
@@ -36,6 +43,34 @@ public class SqlServerOffset {
 
   public Map<String, String> get() {
     return state;
+  }
+
+  Map<String, String> generateCdapOffsets(SourceRecord sourceRecord) {
+    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
+    String changLsn = (String) sourceOffset.get(SourceInfo.CHANGE_LSN_KEY);
+    String commitLsn = (String) sourceOffset.get(SourceInfo.COMMIT_LSN_KEY);
+    Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
+    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    String snapshotTables = state.get(SNAPSHOT_TABLES);
+
+    Map<String, String> deltaOffset = new HashMap<>(5);
+    if (changLsn != null) {
+      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, changLsn);
+    }
+    if (commitLsn != null) {
+      deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, commitLsn);
+    }
+    if (snapshot != null) {
+      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, String.valueOf(snapshot));
+    }
+    if (snapshotCompleted != null) {
+      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, String.valueOf(snapshotCompleted));
+    }
+    if (!Strings.isNullOrEmpty(snapshotTables)) {
+      deltaOffset.put(SNAPSHOT_TABLES, snapshotTables);
+    }
+
+    return deltaOffset;
   }
 
   @Override

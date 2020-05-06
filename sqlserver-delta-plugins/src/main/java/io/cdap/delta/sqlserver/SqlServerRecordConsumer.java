@@ -38,7 +38,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -79,13 +78,10 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
-    String snapshotTables = sqlServerOffset.get().get(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES);
-    Set<String> snapshotTableSet = new HashSet<>();
-    if (!Strings.isNullOrEmpty(snapshotTables)) {
-      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, snapshotTables);
-      snapshotTableSet = new HashSet<>(Arrays.asList(snapshotTables.split(",")));
-    }
+    Map<String, String> deltaOffset = sqlServerOffset.generateCdapOffsets(sourceRecord);
+    String snapshotTables = deltaOffset.get(SqlServerOffset.SNAPSHOT_TABLES);
+    Set<String> snapshotTableSet = Strings.isNullOrEmpty(snapshotTables) ? new HashSet<>() :
+      new HashSet<>(Arrays.asList(snapshotTables.split(",")));
     Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
@@ -155,7 +151,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       }
       snapshotTableSet.add(sourceTableId);
       String updatedSnapshotTables = String.join(",", snapshotTableSet);
-      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, updatedSnapshotTables);
+      deltaOffset.put(SqlServerOffset.SNAPSHOT_TABLES, updatedSnapshotTables);
       recordOffset = new Offset(deltaOffset);
       builder.setOffset(recordOffset);
 
@@ -177,7 +173,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
         throw new StopConnectorException("Interrupted while emitting an event.");
       }
-      sqlServerOffset.get().put(SqlServerConstantOffsetBackingStore.SNAPSHOT_TABLES, updatedSnapshotTables);
+      sqlServerOffset.get().put(SqlServerOffset.SNAPSHOT_TABLES, updatedSnapshotTables);
     }
 
     if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {
@@ -207,27 +203,5 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
       throw new StopConnectorException("Interrupted while emitting an event.");
     }
-  }
-
-  private Map<String, String> generateCdapOffsets(SourceRecord sourceRecord) {
-    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
-    String changLsn = (String) sourceOffset.get(SourceInfo.CHANGE_LSN_KEY);
-    String commitLsn = (String) sourceOffset.get(SourceInfo.COMMIT_LSN_KEY);
-    Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
-    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
-    Map<String, String> deltaOffset = new HashMap<>(4);
-    if (changLsn != null) {
-      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, changLsn);
-    }
-    if (commitLsn != null) {
-      deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, commitLsn);
-    }
-    if (snapshot != null) {
-      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, String.valueOf(snapshot));
-    }
-    if (snapshotCompleted != null) {
-      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, String.valueOf(snapshotCompleted));
-    }
-    return deltaOffset;
   }
 }
