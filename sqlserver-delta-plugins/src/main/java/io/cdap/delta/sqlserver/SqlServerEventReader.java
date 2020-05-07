@@ -25,16 +25,20 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
 import io.debezium.config.Configuration;
+import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.connector.sqlserver.SqlServerConnection;
 import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
+import io.debezium.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Driver;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -92,28 +96,36 @@ public class SqlServerEventReader implements EventReader {
           return schema == null ? table : schema + "." + table;
         }, t -> t));
 
+    Map<String, String> state = offset.get(); // this will never be null
     // offset config
-    Configuration.Builder builder = Configuration.create()
-                                   .with("connector.class", SqlServerConnector.class.getName())
-                                   .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
-                                   .with("offset.flush.interval.ms", 1000);
-    SqlServerConstantOffsetBackingStore.deserializeOffsets(offset.get()).forEach(builder::with);
+    Configuration debeziumConf = Configuration.create()
+      .with("connector.class", SqlServerConnector.class.getName())
+      .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
+      .with("offset.flush.interval.ms", 1000)
+      /* bind offset configs with debeizumConf */
+      .with("change_lsn", state.getOrDefault(SourceInfo.CHANGE_LSN_KEY, ""))
+      .with("commit_lsn", state.getOrDefault(SourceInfo.COMMIT_LSN_KEY, ""))
+      .with("snapshot", state.getOrDefault(SourceInfo.SNAPSHOT_KEY, ""))
+      .with("snapshot_completed", state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, ""))
+      /* begin connector properties */
+      .with("name", "delta")
+      .with("database.hostname", config.getHost())
+      .with("database.port", config.getPort())
+      .with("database.user", config.getUser())
+      .with("database.password", config.getPassword())
+      .with("database.history", DBSchemaHistory.class.getName())
+      .with("database.dbname", databaseName)
+      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
+      .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
+      .with("database.serverTimezone", config.getServerTimezone())
+      .build();
 
-    Configuration debeziumConf =
-      builder
-        /* begin connector properties */
-        .with("name", "delta")
-        .with("database.hostname", config.getHost())
-        .with("database.port", config.getPort())
-        .with("database.user", config.getUser())
-        .with("database.password", config.getPassword())
-        .with("database.history", DBSchemaHistory.class.getName())
-        .with("database.dbname", databaseName)
-        .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
-        .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
-        .with("database.serverTimezone", config.getServerTimezone())
-        .build();
     DBSchemaHistory.deltaRuntimeContext = context;
+
+    String snapshotTablesStr = state.get(SqlServerOffset.SNAPSHOT_TABLES);
+    Set<String> snapshotTables = Strings.isNullOrEmpty(snapshotTablesStr) ? new HashSet<>() :
+      new HashSet<>(Arrays.asList(snapshotTablesStr.split(SqlServerOffset.DELIMITER)));
+
     /*
        this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
        but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
@@ -136,7 +148,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();
@@ -144,7 +156,6 @@ public class SqlServerEventReader implements EventReader {
     } finally {
       Thread.currentThread().setContextClassLoader(oldCL);
     }
-
   }
 
   @Override

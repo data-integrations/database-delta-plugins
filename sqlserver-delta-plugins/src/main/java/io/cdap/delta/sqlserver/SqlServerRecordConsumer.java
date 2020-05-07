@@ -27,7 +27,6 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
-import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.embedded.StopConnectorException;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -36,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,16 +51,15 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final EventEmitter emitter;
   // we need this since there is no way to get the db information from the source record
   private final String databaseName;
-  // this is hack to track the tables getting created or not
-  private final Set<SourceTable> trackingTables;
+  private final Set<String> snapshotTables;
   private final Map<String, SourceTable> sourceTableMap;
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
-                          Map<String, SourceTable> sourceTableMap) {
+                          Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
-    this.trackingTables = new HashSet<>();
+    this.snapshotTables = snapshotTables;
     this.sourceTableMap = sourceTableMap;
   }
 
@@ -77,12 +74,12 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, String> deltaOffset = SqlServerConstantOffsetBackingStore.serializeOffsets(sourceRecord);
-    Offset recordOffset = new Offset(deltaOffset);
+    SqlServerOffset sqlServerOffset = new SqlServerOffset(sourceRecord.sourceOffset());
+    sqlServerOffset.setSnapshotTables(snapshotTables);
+    boolean isSnapshot = sqlServerOffset.isSnapshot();
+    Offset recordOffset = sqlServerOffset.getAsOffset();
+
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
-
-    boolean isSnapshot = Boolean.TRUE.equals(sourceRecord.sourceOffset().get(SourceInfo.SNAPSHOT_KEY));
-
     DMLOperation op;
     String opStr = val.get("op");
     if ("c".equals(opStr) || "r".equals(opStr)) {
@@ -96,13 +93,12 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    StructuredRecord key = Records.convert((Struct) sourceRecord.key());
-    String recordName = key.getSchema().getRecordName();
-    // the record name will always be like this: [db.server.name].[schema].[table].Envelope
-    if (recordName == null) {
+    String topicName = sourceRecord.topic();
+    // the topic name will always be like this: [db.server.name].[schema].[table]
+    if (topicName == null) {
       return; // safety check to avoid NPE
     }
-    String[] splits = recordName.split("\\.");
+    String[] splits = topicName.split("\\.");
     String schemaName = splits[1];
     String tableName = splits[2];
     String sourceTableId = schemaName + "." + tableName;
@@ -132,22 +128,23 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    // this is a hack to send DDL event if we first see this table, now all the stuff is in memory
-    SourceTable trackingTable = new SourceTable(databaseName, tableName);
     DDLEvent.Builder builder = DDLEvent.builder()
                                  .setDatabase(databaseName)
-                                 .setOffset(recordOffset)
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
-    // send the ddl event if the first see the table and the it is in snapshot.
+    // send the ddl events only if we see the table at the first time
     // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
-    if (!trackingTables.contains(trackingTable) && isSnapshot) {
+    if (!snapshotTables.contains(sourceTableId)) {
+      StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();
       if (fields != null && !fields.isEmpty()) {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
+      sqlServerOffset.addSnapshotTable(sourceTableId);
+      recordOffset = sqlServerOffset.getAsOffset();
+      builder.setOffset(recordOffset);
 
       try {
         // try to always drop the table before snapshot the schema.
@@ -167,7 +164,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
         throw new StopConnectorException("Interrupted while emitting an event.");
       }
-      trackingTables.add(trackingTable);
+      snapshotTables.add(sourceTableId);
     }
 
     if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {
