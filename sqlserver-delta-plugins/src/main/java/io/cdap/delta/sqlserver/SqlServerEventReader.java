@@ -37,7 +37,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Driver;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -121,12 +122,9 @@ public class SqlServerEventReader implements EventReader {
 
     DBSchemaHistory.deltaRuntimeContext = context;
 
-    String snapshotTables = state.get(SqlServerOffset.SNAPSHOT_TABLES);
-    Map<String, String> sqlServerState = new HashMap<>();
-    if (!Strings.isNullOrEmpty(snapshotTables)) {
-      sqlServerState.put(SqlServerOffset.SNAPSHOT_TABLES, snapshotTables);
-    }
-    SqlServerOffset sqlServerOffset = new SqlServerOffset(sqlServerState);
+    String snapshotTablesStr = state.get(SqlServerOffset.SNAPSHOT_TABLES);
+    Set<String> snapshotTables = Strings.isNullOrEmpty(snapshotTablesStr) ? new HashSet<>() :
+      new HashSet<>(Arrays.asList(snapshotTablesStr.split(SqlServerOffset.DELIMITER)));
 
     /*
        this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
@@ -150,7 +148,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, sqlServerOffset, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();

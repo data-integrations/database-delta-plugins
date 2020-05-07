@@ -16,17 +16,14 @@
 
 package io.cdap.delta.sqlserver;
 
+import io.cdap.delta.api.Offset;
 import io.debezium.connector.sqlserver.SourceInfo;
-import io.debezium.util.Strings;
-import org.apache.kafka.connect.source.SourceRecord;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Record offset information for SqlServer.
@@ -35,52 +32,51 @@ public class SqlServerOffset {
   static final String DELIMITER = ",";
   static final String SNAPSHOT_TABLES = "snapshot_tables";
 
-  private final Map<String, String> state;
+  private final String changeLsn;
+  private final String commitLsn;
+  private final Boolean isSnapshot;
+  private final Boolean isSnapshotCompleted;
+  private Set<String> snapshotTables;
 
-  public SqlServerOffset() {
-    this.state = new ConcurrentHashMap<>();
+  SqlServerOffset(Map<String, ?> properties) {
+    this.changeLsn = (String) properties.get(SourceInfo.CHANGE_LSN_KEY);
+    this.commitLsn = (String) properties.get(SourceInfo.COMMIT_LSN_KEY);
+    this.isSnapshot = (Boolean) properties.get(SourceInfo.SNAPSHOT_KEY);
+    this.isSnapshotCompleted = (Boolean) properties.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    this.snapshotTables = new HashSet<>();
   }
 
-  public SqlServerOffset(Map<String, String> state) {
-    this.state = new ConcurrentHashMap<>(state);
+  boolean isSnapshot() {
+    return Boolean.TRUE.equals(isSnapshot);
   }
 
-  Map<String, String> generateCdapOffsets(SourceRecord sourceRecord) {
-    Map<String, ?> sourceOffset = sourceRecord.sourceOffset();
-    String changLsn = (String) sourceOffset.get(SourceInfo.CHANGE_LSN_KEY);
-    String commitLsn = (String) sourceOffset.get(SourceInfo.COMMIT_LSN_KEY);
-    Boolean snapshot = (Boolean) sourceOffset.get(SourceInfo.SNAPSHOT_KEY);
-    Boolean snapshotCompleted = (Boolean) sourceOffset.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
-    String snapshotTables = state.get(SNAPSHOT_TABLES);
+  void setSnapshotTables(Set<String> snapshotTables) {
+   this.snapshotTables = new HashSet<>(snapshotTables);
+  }
 
-    Map<String, String> deltaOffset = new HashMap<>(5);
-    if (changLsn != null) {
-      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, changLsn);
+  void addSnapshotTable(String table) {
+    snapshotTables.add(table);
+  }
+
+  Offset getAsOffset() {
+    Map<String, String> deltaOffset = new HashMap<>();
+    if (changeLsn != null) {
+      deltaOffset.put(SourceInfo.CHANGE_LSN_KEY, changeLsn);
     }
     if (commitLsn != null) {
       deltaOffset.put(SourceInfo.COMMIT_LSN_KEY, commitLsn);
     }
-    if (snapshot != null) {
-      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, String.valueOf(snapshot));
+    if (isSnapshot != null) {
+      deltaOffset.put(SourceInfo.SNAPSHOT_KEY, String.valueOf(isSnapshot));
     }
-    if (snapshotCompleted != null) {
-      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, String.valueOf(snapshotCompleted));
+    if (isSnapshotCompleted != null) {
+      deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, String.valueOf(isSnapshotCompleted));
     }
-    if (!Strings.isNullOrEmpty(snapshotTables)) {
-      deltaOffset.put(SNAPSHOT_TABLES, snapshotTables);
+    if (snapshotTables != null && !snapshotTables.isEmpty()) {
+      deltaOffset.put(SNAPSHOT_TABLES, String.join(DELIMITER, snapshotTables));
     }
 
-    return deltaOffset;
-  }
-
-  Set<String> getSnapshotTables() {
-    String snapshotTables = state.get(SqlServerOffset.SNAPSHOT_TABLES);
-    return Strings.isNullOrEmpty(snapshotTables) ? new HashSet<>() :
-      new HashSet<>(Arrays.asList(snapshotTables.split(DELIMITER)));
-  }
-
-  void setSnapshotTables(Set<String> snapshotTableSet) {
-    state.put(SqlServerOffset.SNAPSHOT_TABLES, String.join(DELIMITER, snapshotTableSet));
+    return new Offset(deltaOffset);
   }
 
   @Override
@@ -92,11 +88,15 @@ public class SqlServerOffset {
       return false;
     }
     SqlServerOffset that = (SqlServerOffset) o;
-    return Objects.equals(state, that.state);
+    return Objects.equals(changeLsn, that.changeLsn)
+      && Objects.equals(commitLsn, that.commitLsn)
+      && Objects.equals(isSnapshot, that.isSnapshot)
+      && Objects.equals(isSnapshotCompleted, that.isSnapshotCompleted)
+      && Objects.equals(snapshotTables, that.snapshotTables);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(state);
+    return Objects.hash(changeLsn, commitLsn, isSnapshot, isSnapshotCompleted, snapshotTables);
   }
 }
