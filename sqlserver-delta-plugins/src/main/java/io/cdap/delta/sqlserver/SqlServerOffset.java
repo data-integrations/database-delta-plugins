@@ -51,7 +51,7 @@ public class SqlServerOffset {
   }
 
   void setSnapshotTables(Set<String> snapshotTables) {
-   this.snapshotTables = new HashSet<>(snapshotTables);
+    this.snapshotTables = new HashSet<>(snapshotTables);
   }
 
   void addSnapshotTable(String table) {
