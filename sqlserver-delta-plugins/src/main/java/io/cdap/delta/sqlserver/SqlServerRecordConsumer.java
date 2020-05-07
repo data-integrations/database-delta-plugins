@@ -29,7 +29,6 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
 import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.embedded.StopConnectorException;
-import io.debezium.util.Strings;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
@@ -37,8 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -79,9 +76,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     Map<String, String> deltaOffset = sqlServerOffset.generateCdapOffsets(sourceRecord);
-    String snapshotTables = deltaOffset.get(SqlServerOffset.SNAPSHOT_TABLES);
-    Set<String> snapshotTableSet = Strings.isNullOrEmpty(snapshotTables) ? new HashSet<>() :
-      new HashSet<>(Arrays.asList(snapshotTables.split(",")));
+    Set<String> snapshotTableSet = sqlServerOffset.getSnapshotTables();
     Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
@@ -150,8 +145,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
       snapshotTableSet.add(sourceTableId);
-      String updatedSnapshotTables = String.join(",", snapshotTableSet);
-      deltaOffset.put(SqlServerOffset.SNAPSHOT_TABLES, updatedSnapshotTables);
+      deltaOffset.put(SqlServerOffset.SNAPSHOT_TABLES, String.join(SqlServerOffset.DELIMITER, snapshotTableSet));
       recordOffset = new Offset(deltaOffset);
       builder.setOffset(recordOffset);
 
@@ -173,7 +167,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
         throw new StopConnectorException("Interrupted while emitting an event.");
       }
-      sqlServerOffset.get().put(SqlServerOffset.SNAPSHOT_TABLES, updatedSnapshotTables);
+      sqlServerOffset.setSnapshotTables(snapshotTableSet);
     }
 
     if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {

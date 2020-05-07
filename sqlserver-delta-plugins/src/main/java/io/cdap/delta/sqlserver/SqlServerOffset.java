@@ -20,15 +20,19 @@ import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.util.Strings;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Record offset information for SqlServer.
  */
 public class SqlServerOffset {
+  static final String DELIMITER = ",";
   static final String SNAPSHOT_TABLES = "snapshot_tables";
 
   private final Map<String, String> state;
@@ -39,10 +43,6 @@ public class SqlServerOffset {
 
   public SqlServerOffset(Map<String, String> state) {
     this.state = new ConcurrentHashMap<>(state);
-  }
-
-  public Map<String, String> get() {
-    return state;
   }
 
   Map<String, String> generateCdapOffsets(SourceRecord sourceRecord) {
@@ -71,6 +71,16 @@ public class SqlServerOffset {
     }
 
     return deltaOffset;
+  }
+
+  Set<String> getSnapshotTables() {
+    String snapshotTables = state.get(SqlServerOffset.SNAPSHOT_TABLES);
+    return Strings.isNullOrEmpty(snapshotTables) ? new HashSet<>() :
+      new HashSet<>(Arrays.asList(snapshotTables.split(DELIMITER)));
+  }
+
+  void setSnapshotTables(Set<String> snapshotTableSet) {
+    state.put(SqlServerOffset.SNAPSHOT_TABLES, String.join(DELIMITER, snapshotTableSet));
   }
 
   @Override
