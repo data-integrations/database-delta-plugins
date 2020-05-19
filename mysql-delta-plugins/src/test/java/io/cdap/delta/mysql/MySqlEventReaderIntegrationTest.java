@@ -24,8 +24,10 @@ import io.cdap.delta.api.DDLOperation;
 import io.cdap.delta.api.DMLEvent;
 import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaSourceContext;
+import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
+import io.cdap.delta.plugin.mock.BlockingEventEmitter;
 import io.cdap.delta.plugin.mock.MockContext;
 import io.cdap.delta.plugin.mock.MockEventEmitter;
 import org.junit.Assert;
@@ -44,6 +46,8 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.TimeZone;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -100,8 +104,9 @@ public class MySqlEventReaderIntegrationTest {
     try (Connection connection = DriverManager.getConnection(connectionUrl, connProperties)) {
       // create table
       try (Statement statement = connection.createStatement()) {
-        statement.execute(String.format("CREATE TABLE %s (id int PRIMARY KEY, name varchar(50), bday date null)",
-                                        CUSTOMERS_TABLE));
+        statement.execute(
+          String.format("CREATE TABLE %s (id int PRIMARY KEY, name varchar(50) not null, bday date null)",
+                        CUSTOMERS_TABLE));
       }
 
       // insert sample data
@@ -142,30 +147,25 @@ public class MySqlEventReaderIntegrationTest {
     Assert.assertEquals(4, eventEmitter.getDdlEvents().size());
     Assert.assertEquals(2, eventEmitter.getDmlEvents().size());
 
-    /*
-      This currently would fails.
-      Need to investigate why it's DROP_TABLE, CREATE_DATABASE, CREATE_DATABASE, CREATE_TABLE
     DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
-    Assert.assertEquals(DDLOperation.DROP_DATABASE, ddlEvent.getOperation());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
-
-    ddlEvent = eventEmitter.getDdlEvents().get(1);
-    Assert.assertEquals(DDLOperation.CREATE_DATABASE, ddlEvent.getOperation());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
-
-    ddlEvent = eventEmitter.getDdlEvents().get(2);
     Assert.assertEquals(DDLOperation.DROP_TABLE, ddlEvent.getOperation());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
-    */
 
-    DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(3);
+    ddlEvent = eventEmitter.getDdlEvents().get(1);
+    Assert.assertEquals(DDLOperation.DROP_DATABASE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
+
+    ddlEvent = eventEmitter.getDdlEvents().get(2);
+    Assert.assertEquals(DDLOperation.CREATE_DATABASE, ddlEvent.getOperation());
+    Assert.assertEquals(DB, ddlEvent.getDatabase());
+
+    ddlEvent = eventEmitter.getDdlEvents().get(3);
     Assert.assertEquals(DDLOperation.CREATE_TABLE, ddlEvent.getOperation());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
     Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
-    // TODO: this would currently fail, seems to incorrectly return the schema as non-nullable
-    //Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
+    Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
 
     DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
     Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
@@ -177,8 +177,7 @@ public class MySqlEventReaderIntegrationTest {
       .set("name", "alice")
       .setDate("bday", LocalDate.ofEpochDay(0))
       .build();
-    // this fails with schemas that are different
-    // Assert.assertEquals(expected, row);
+    Assert.assertEquals(expected, row);
 
     dmlEvent = eventEmitter.getDmlEvents().get(1);
     Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
@@ -190,7 +189,37 @@ public class MySqlEventReaderIntegrationTest {
       .set("name", "bob")
       .setDate("bday", LocalDate.ofEpochDay(365))
       .build();
-    // this fails with schemas that are different
-    // Assert.assertEquals(expected, row);
+    Assert.assertEquals(expected, row);
+  }
+
+  @Test
+  public void stopReaderTest() throws Exception {
+    SourceTable sourceTable = new SourceTable(DB, CUSTOMERS_TABLE, null,
+                                              Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+
+    DeltaSourceContext context = new MockContext(Driver.class);
+    BlockingQueue<DDLEvent> ddlEvents = new ArrayBlockingQueue<>(1);
+    BlockingQueue<DMLEvent> dmlEvents = new ArrayBlockingQueue<>(1);
+    EventEmitter eventEmitter = new BlockingEventEmitter(ddlEvents, dmlEvents);
+    MySqlConfig config = new MySqlConfig("localhost", port, "root", password, 13, DB,
+                                         TimeZone.getDefault().getID());
+
+    MySqlEventReader eventReader = new MySqlEventReader(Collections.singleton(sourceTable), config,
+                                                        context, eventEmitter);
+
+    eventReader.start(new Offset());
+
+    int count = 0;
+    while (ddlEvents.size() < 1 && count < 100) {
+      TimeUnit.MILLISECONDS.sleep(50);
+      count++;
+    }
+
+    if (count >= 100) {
+      Assert.fail("Reader never emitted any events.");
+    }
+
+    eventReader.stop();
+    Assert.assertFalse(eventReader.failedToStop());
   }
 }

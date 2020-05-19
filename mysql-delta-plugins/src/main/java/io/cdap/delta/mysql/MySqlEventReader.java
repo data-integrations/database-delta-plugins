@@ -16,6 +16,8 @@
 
 package io.cdap.delta.mysql;
 
+import com.google.common.annotations.VisibleForTesting;
+import io.cdap.delta.api.DeltaFailureException;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -37,6 +39,7 @@ import io.debezium.relational.ddl.DdlParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.sql.Driver;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
@@ -59,6 +62,7 @@ public class MySqlEventReader implements EventReader {
   private final DeltaSourceContext context;
   private final Set<SourceTable> sourceTables;
   private EmbeddedEngine engine;
+  private volatile boolean failedToStop;
 
   public MySqlEventReader(Set<SourceTable> sourceTables, MySqlConfig config,
                           DeltaSourceContext context, EventEmitter emitter) {
@@ -67,6 +71,7 @@ public class MySqlEventReader implements EventReader {
     this.context = context;
     this.emitter = emitter;
     this.executorService = Executors.newSingleThreadScheduledExecutor();
+    this.failedToStop = false;
   }
 
   @Override
@@ -111,6 +116,20 @@ public class MySqlEventReader implements EventReader {
       .build();
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
+    /*
+       this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
+       but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
+       those DDL events unless the DB history is wiped. This only fixes handling of DDL errors that
+       happen during the initial snapshot.
+        TODO: (CDAP-16735) fix this more comprehensively
+     */
+    if (offset.get().isEmpty()) {
+      try {
+        DBSchemaHistory.wipeHistory();
+      } catch (IOException e) {
+        throw new RuntimeException("Unable to wipe schema history at start of replication.", e);
+      }
+    }
 
     MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
     DdlParser ddlParser = mysqlConf.getDdlParsingMode().getNewParserInstance(mySqlValueConverters, tableId -> true);
@@ -132,10 +151,16 @@ public class MySqlEventReader implements EventReader {
   }
 
   public void stop() throws InterruptedException {
-    if (engine != null && engine.stop()) {
-      engine.await(1, TimeUnit.MINUTES);
+    executorService.shutdownNow();
+    if (!executorService.awaitTermination(2, TimeUnit.MINUTES)) {
+      LOG.warn("Unable to cleanly shutdown reader within the timeout.");
+      failedToStop = true;
     }
-    executorService.shutdown();
+  }
+
+  @VisibleForTesting
+  boolean failedToStop() {
+    return failedToStop;
   }
 
   private static MySqlValueConverters getValueConverters(MySqlConnectorConfig configuration) {

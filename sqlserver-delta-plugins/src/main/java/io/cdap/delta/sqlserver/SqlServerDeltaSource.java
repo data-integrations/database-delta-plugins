@@ -30,6 +30,8 @@ import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.plugin.common.DriverCleanup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Driver;
 
@@ -40,6 +42,7 @@ import java.sql.Driver;
 @Name(SqlServerDeltaSource.NAME)
 @Description("Delta source for SqlServer.")
 public class SqlServerDeltaSource implements DeltaSource {
+  private static final Logger LOG = LoggerFactory.getLogger(SqlServerDeltaSource.class);
   public static final String NAME = "sqlserver";
   private final SqlServerConfig config;
 
