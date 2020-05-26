@@ -79,6 +79,7 @@
         <artifactId>docker-maven-plugin</artifactId>
         <version>0.33.0</version>
         <configuration>
+          <skip>${skipITs}</skip>
           <images>
             <image>
               <name>${mysql.image}</name>
