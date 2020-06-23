@@ -27,7 +27,7 @@ import javax.annotation.Nullable;
  */
 public class SqlServerConfig extends PluginConfig {
 
-  @Description("Hostname of the SqlServer to read from.")
+  @Description("Hostname or IP address of the SqlServer to read from.")
   private String host;
 
   @Description("Port to use to connect to the SqlServer.")

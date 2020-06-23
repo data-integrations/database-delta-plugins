@@ -27,7 +27,7 @@ import javax.annotation.Nullable;
  * Plugin configuration for the MySQL origin.
  */
 public class MySqlConfig extends PluginConfig {
-  @Description("Hostname of the MySQL server to read from.")
+  @Description("Hostname or IP address of the MySQL server to read from.")
   private String host;
 
   @Description("Port to use to connect to the MySQL server.")
