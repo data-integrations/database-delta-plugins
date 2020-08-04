@@ -30,6 +30,8 @@
   </modules>
   <name>Database Delta plugins</name>
   <packaging>pom</packaging>
+  <description>Database Delta plugins</description>
+  <url>https://github.com/data-integrations/database-delta-plugins</url>
 
   <licenses>
     <license>
@@ -39,6 +41,22 @@
       <comments>A business-friendly OSS license</comments>
     </license>
   </licenses>
+
+  <developers>
+    <developer>
+      <name>CDAP</name>
+      <email>cdap-dev@googlegroups.com</email>
+      <organization>CDAP</organization>
+      <organizationUrl>http://cdap.io</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/data-integrations/database-delta-plugins.git</connection>
+    <developerConnection>scm:git:git@github.com:data-integrations/database-delta-plugins.git</developerConnection>
+    <url>https://github.com/data-integrations/database-delta-plugins.git</url>
+    <tag>HEAD</tag>
+  </scm>
 
   <properties>
     <debezium.version>0.9.5.Final</debezium.version>
