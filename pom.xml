@@ -60,7 +60,7 @@
 
   <properties>
     <debezium.version>0.9.5.Final</debezium.version>
-    <delta.version>0.1.0-SNAPSHOT</delta.version>
+    <delta.version>0.2.0-SNAPSHOT</delta.version>
     <slf4j.version>1.7.25</slf4j.version>
   </properties>
 
