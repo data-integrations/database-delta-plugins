@@ -166,19 +166,23 @@ public class Records {
       } else {
         switch (logicalType) {
           case DATE:
-            builder.setDate(fieldName, LocalDate.ofEpochDay((int) val));
+            builder.setDate(fieldName, val == null ? null : LocalDate.ofEpochDay((int) val));
             break;
           case TIMESTAMP_MILLIS:
-            builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MILLISECONDS));
+            builder.setTimestamp(fieldName, val == null ? null : getZonedDateTime((long) val,
+                                                                                  TimeUnit.MILLISECONDS));
             break;
           case TIMESTAMP_MICROS:
-            builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MICROSECONDS));
+            builder.setTimestamp(fieldName, val == null ? null : getZonedDateTime((long) val,
+                                                                                  TimeUnit.MICROSECONDS));
             break;
           case TIME_MILLIS:
-            builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MILLISECONDS.toNanos((int) val)));
+            builder.setTime(fieldName, val == null ? null : LocalTime.ofNanoOfDay(
+              TimeUnit.MILLISECONDS.toNanos((int) val)));
             break;
           case TIME_MICROS:
-            builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MICROSECONDS.toNanos((long) val)));
+            builder.setTime(fieldName, val == null ? null : LocalTime.ofNanoOfDay(
+              TimeUnit.MICROSECONDS.toNanos((long) val)));
             break;
           case DECIMAL:
             builder.setDecimal(fieldName, (BigDecimal) val);
