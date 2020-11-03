@@ -202,7 +202,7 @@ public class MySqlEventReaderIntegrationTest {
     Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
     row = dmlEvent.getRow();
     expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
-      .set("id", 1)
+      .set("id", 2)
       .set("name", "tim")
       .setDate("bday", null)
       .build();
