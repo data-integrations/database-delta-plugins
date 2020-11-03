@@ -161,7 +161,7 @@ public class Records {
       Schema fieldSchema = field.getSchema();
       fieldSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullable() : fieldSchema;
       Schema.LogicalType logicalType = fieldSchema.getLogicalType();
-      if (logicalType == null) {
+      if (logicalType == null || val == null) {
         builder.set(fieldName, val);
       } else {
         switch (logicalType) {
