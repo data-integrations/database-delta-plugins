@@ -119,6 +119,11 @@ public class SqlServerEventReaderIntegrationTest {
         ps.setDate(3, Date.valueOf("1971-01-01"));
         ps.addBatch();
 
+        ps.setInt(1, 2);
+        ps.setString(2, "tim");
+        ps.setDate(3, null);
+        ps.addBatch();
+
         ps.executeBatch();
       }
 
@@ -192,6 +197,18 @@ public class SqlServerEventReaderIntegrationTest {
       .set("id", 1)
       .set("name", "bob")
       .setDate("bday", LocalDate.ofEpochDay(365))
+      .build();
+    Assert.assertEquals(expected, row);
+
+    dmlEvent = eventEmitter.getDmlEvents().get(2);
+    Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
+    Assert.assertEquals(DB, dmlEvent.getDatabase());
+    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
+    row = dmlEvent.getRow();
+    expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
+      .set("id", 2)
+      .set("name", "tim")
+      .setDate("bday", null)
       .build();
     Assert.assertEquals(expected, row);
   }
