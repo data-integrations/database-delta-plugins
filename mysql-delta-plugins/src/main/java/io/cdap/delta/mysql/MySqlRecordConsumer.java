@@ -159,14 +159,14 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    DMLOperation op;
+    DMLOperation.Type op;
     String opStr = val.get("op");
     if ("c".equals(opStr)) {
-      op = DMLOperation.INSERT;
+      op = DMLOperation.Type.INSERT;
     } else if ("u".equals(opStr)) {
-      op = DMLOperation.UPDATE;
+      op = DMLOperation.Type.UPDATE;
     } else if ("d".equals(opStr)) {
-      op = DMLOperation.DELETE;
+      op = DMLOperation.Type.DELETE;
     } else {
       LOG.warn("Skipping unknown operation type '{}'", opStr);
       return;
@@ -199,7 +199,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder builder = DMLEvent.builder()
       .setOffset(recordOffset)
-      .setOperation(op)
+      .setOperationType(op)
       .setDatabase(databaseName)
       .setTable(tableName)
       .setTransactionId(transactionId)
@@ -207,9 +207,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       .setSnapshot(isSnapshot);
 
     // It is required for the source to provide the previous row if the dml operation is 'UPDATE'
-    if (op == DMLOperation.UPDATE) {
+    if (op == DMLOperation.Type.UPDATE) {
       emitter.emit(builder.setPreviousRow(before).setRow(after).build());
-    } else if (op == DMLOperation.DELETE) {
+    } else if (op == DMLOperation.Type.DELETE) {
       emitter.emit(builder.setRow(before).build());
     } else {
       emitter.emit(builder.setRow(after).build());
@@ -240,12 +240,12 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             TableId tableId = alteredEvent.tableId();
             Table table = tables.forTable(tableId);
             SourceTable sourceTable = getSourceTable(database, tableId.table());
-            DDLOperation ddlOp;
+            DDLOperation.Type ddlOp;
             if (alteredEvent.previousTableId() != null) {
-              ddlOp = DDLOperation.RENAME_TABLE;
+              ddlOp = DDLOperation.Type.RENAME_TABLE;
               builder.setPrevTable(alteredEvent.previousTableId().table());
             } else {
-              ddlOp = DDLOperation.ALTER_TABLE;
+              ddlOp = DDLOperation.Type.ALTER_TABLE;
             }
 
             if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, ddlOp)) {
@@ -260,8 +260,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
           case DROP_TABLE:
             DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
             sourceTable = getSourceTable(database, droppedEvent.tableId().table());
-            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.DROP_TABLE)) {
-              ddlEvent = builder.setOperation(DDLOperation.DROP_TABLE)
+            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.DROP_TABLE)) {
+              ddlEvent = builder.setOperation(DDLOperation.Type.DROP_TABLE)
                 .setTable(droppedEvent.tableId().table())
                 .build();
             }
@@ -271,8 +271,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             tableId = createdEvent.tableId();
             table = tables.forTable(tableId);
             sourceTable = getSourceTable(database, tableId.table());
-            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.CREATE_TABLE)) {
-              ddlEvent = builder.setOperation(DDLOperation.CREATE_TABLE)
+            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.CREATE_TABLE)) {
+              ddlEvent = builder.setOperation(DDLOperation.Type.CREATE_TABLE)
                 .setTable(tableId.table())
                 .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
                              Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
@@ -281,24 +281,24 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             }
             break;
           case DROP_DATABASE:
-            ddlEvent = builder.setOperation(DDLOperation.DROP_DATABASE).build();
+            ddlEvent = builder.setOperation(DDLOperation.Type.DROP_DATABASE).build();
             break;
           case CREATE_DATABASE:
             // due to a bug in io.debezium.relational.ddl.AbstractDdlParser#signalDropDatabase
             // a DROP_DATABASE event will be mistakenly categorized as a CREATE_DATABASE event.
             // TODO: check if this is fixed in a newer debezium version
             if (event.statement() != null && event.statement().startsWith("DROP DATABASE")) {
-              ddlEvent = builder.setOperation(DDLOperation.DROP_DATABASE).build();
+              ddlEvent = builder.setOperation(DDLOperation.Type.DROP_DATABASE).build();
             } else {
-              ddlEvent = builder.setOperation(DDLOperation.CREATE_DATABASE).build();
+              ddlEvent = builder.setOperation(DDLOperation.Type.CREATE_DATABASE).build();
             }
             break;
           case TRUNCATE_TABLE:
             DdlParserListener.TableTruncatedEvent truncatedEvent =
               (DdlParserListener.TableTruncatedEvent) event;
             sourceTable = getSourceTable(database, truncatedEvent.tableId().table());
-            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.TRUNCATE_TABLE)) {
-              ddlEvent = builder.setOperation(DDLOperation.TRUNCATE_TABLE)
+            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.TRUNCATE_TABLE)) {
+              ddlEvent = builder.setOperation(DDLOperation.Type.TRUNCATE_TABLE)
                 .setTable(truncatedEvent.tableId().table())
                 .build();
             }
@@ -318,12 +318,12 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     }
   }
 
-  private boolean shouldEmitDdlEventForOperation(boolean readAllTables, SourceTable sourceTable, DDLOperation op) {
+  private boolean shouldEmitDdlEventForOperation(boolean readAllTables, SourceTable sourceTable, DDLOperation.Type op) {
     return (!sourceTableNotValid(readAllTables, sourceTable)) &&
       (!isDDLOperationBlacklisted(readAllTables, sourceTable, op));
   }
 
-  private boolean isDDLOperationBlacklisted(boolean readAllTables, SourceTable sourceTable, DDLOperation op) {
+  private boolean isDDLOperationBlacklisted(boolean readAllTables, SourceTable sourceTable, DDLOperation.Type op) {
     // return true if record consumer was not set to read all table events and the DDL op has been
     // blacklisted for this table
     return !readAllTables && sourceTable.getDdlBlacklist().contains(op);
