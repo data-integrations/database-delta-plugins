@@ -161,25 +161,25 @@ public class SqlServerEventReaderIntegrationTest {
     Assert.assertEquals(2, eventEmitter.getDmlEvents().size());
 
     DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
-    Assert.assertEquals(DDLOperation.DROP_TABLE, ddlEvent.getOperation());
+    Assert.assertEquals(DDLOperation.Type.DROP_TABLE, ddlEvent.getOperation().getType());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
-    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
+    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
 
     ddlEvent = eventEmitter.getDdlEvents().get(1);
-    Assert.assertEquals(DDLOperation.CREATE_DATABASE, ddlEvent.getOperation());
+    Assert.assertEquals(DDLOperation.Type.CREATE_DATABASE, ddlEvent.getOperation().getType());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
 
     ddlEvent = eventEmitter.getDdlEvents().get(2);
-    Assert.assertEquals(DDLOperation.CREATE_TABLE, ddlEvent.getOperation());
+    Assert.assertEquals(DDLOperation.Type.CREATE_TABLE, ddlEvent.getOperation().getType());
     Assert.assertEquals(DB, ddlEvent.getDatabase());
-    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getTable());
+    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
     Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
     Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
 
     DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
-    Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
+    Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
     Assert.assertEquals(DB, dmlEvent.getDatabase());
-    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
+    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
     StructuredRecord row = dmlEvent.getRow();
     StructuredRecord expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
       .set("id", 0)
@@ -189,9 +189,9 @@ public class SqlServerEventReaderIntegrationTest {
     Assert.assertEquals(expected, row);
 
     dmlEvent = eventEmitter.getDmlEvents().get(1);
-    Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
+    Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
     Assert.assertEquals(DB, dmlEvent.getDatabase());
-    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
+    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
     row = dmlEvent.getRow();
     expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
       .set("id", 1)

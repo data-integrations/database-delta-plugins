@@ -80,14 +80,14 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     Offset recordOffset = sqlServerOffset.getAsOffset();
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
-    DMLOperation op;
+    DMLOperation.Type op;
     String opStr = val.get("op");
     if ("c".equals(opStr) || "r".equals(opStr)) {
-      op = DMLOperation.INSERT;
+      op = DMLOperation.Type.INSERT;
     } else if ("u".equals(opStr)) {
-      op = DMLOperation.UPDATE;
+      op = DMLOperation.Type.UPDATE;
     } else if ("d".equals(opStr)) {
-      op = DMLOperation.DELETE;
+      op = DMLOperation.Type.DELETE;
     } else {
       LOG.warn("Skipping unknown operation type '{}'", opStr);
       return;
@@ -120,7 +120,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         after = Records.keepSelectedColumns(after, sourceTable.getColumns());
       }
     }
-    StructuredRecord value = op == DMLOperation.DELETE ? before : after;
+    StructuredRecord value = op == DMLOperation.Type.DELETE ? before : after;
 
     if (value == null) {
       // this is a safety check to prevent npe warning, it should not be null
@@ -148,14 +148,14 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
       try {
         // try to always drop the table before snapshot the schema.
-        emitter.emit(builder.setOperation(DDLOperation.DROP_TABLE)
+        emitter.emit(builder.setOperation(DDLOperation.Type.DROP_TABLE)
                        .setTable(tableName)
                        .build());
 
         // try to emit create database event before create table event
-        emitter.emit(builder.setOperation(DDLOperation.CREATE_DATABASE).build());
+        emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_DATABASE).build());
 
-        emitter.emit(builder.setOperation(DDLOperation.CREATE_TABLE)
+        emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_TABLE)
                        .setTable(tableName)
                        .setSchema(schema)
                        .setPrimaryKey(primaryFields)
@@ -175,7 +175,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder dmlBuilder = DMLEvent.builder()
       .setOffset(recordOffset)
-      .setOperation(op)
+      .setOperationType(op)
       .setDatabase(databaseName)
       .setTable(tableName)
       .setRow(value)
@@ -184,7 +184,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       .setIngestTimestamp(ingestTime == null ? 0L : ingestTime);
 
     // It is required for the source to provide the previous row if the operation is 'UPDATE'
-    if (op == DMLOperation.UPDATE) {
+    if (op == DMLOperation.Type.UPDATE) {
       dmlBuilder.setPreviousRow(before);
     }
 

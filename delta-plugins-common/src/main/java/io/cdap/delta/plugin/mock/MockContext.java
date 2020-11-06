@@ -22,6 +22,7 @@ import io.cdap.cdap.api.plugin.PluginProperties;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.ReplicationError;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -68,6 +69,16 @@ public class MockContext implements DeltaSourceContext {
       @Override
       public void gauge(String metricName, long value) {
         // no-op
+      }
+
+      @Override
+      public Metrics child(Map<String, String> tags) {
+        return this;
+      }
+
+      @Override
+      public Map<String, String> getTags() {
+        return Collections.emptyMap();
       }
     };
   }
