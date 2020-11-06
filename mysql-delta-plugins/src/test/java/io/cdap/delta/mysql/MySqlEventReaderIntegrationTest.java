@@ -197,9 +197,9 @@ public class MySqlEventReaderIntegrationTest {
     Assert.assertEquals(expected, row);
 
     dmlEvent = eventEmitter.getDmlEvents().get(2);
-    Assert.assertEquals(DMLOperation.INSERT, dmlEvent.getOperation());
+    Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
     Assert.assertEquals(DB, dmlEvent.getDatabase());
-    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getTable());
+    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
     row = dmlEvent.getRow();
     expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
       .set("id", 2)
