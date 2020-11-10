@@ -211,12 +211,13 @@ public class Records {
       case BYTES:
       case STRING:
       case INT8:
-      case INT16:
       case INT32:
       case INT64:
       case FLOAT32:
       case FLOAT64:
         return val;
+      case INT16:
+        return ((Short) val).intValue();
       case ARRAY:
         return ((List<?>) val).stream()
           .map(o -> convert(schema.valueSchema(), o))
