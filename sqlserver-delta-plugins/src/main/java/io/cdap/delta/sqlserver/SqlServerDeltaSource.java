@@ -26,6 +26,7 @@ import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.EventReaderDefinition;
+import io.cdap.delta.api.SourceConfigurer;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
@@ -51,7 +52,7 @@ public class SqlServerDeltaSource implements DeltaSource {
   }
 
   @Override
-  public void configure(Configurer configurer) {
+  public void configure(SourceConfigurer configurer) {
     // add Sql-Server JDBC Plugin usage
     configurer.usePluginClass("jdbc", config.getJdbcPluginName(), config.getJDBCPluginId(),
                               PluginProperties.builder().build());
