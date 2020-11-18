@@ -26,6 +26,7 @@ import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.EventReaderDefinition;
+import io.cdap.delta.api.SourceConfigurer;
 import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.api.assessment.TableRegistry;
@@ -49,7 +50,7 @@ public class MySqlDeltaSource implements DeltaSource {
   }
 
   @Override
-  public void configure(Configurer configurer) {
+  public void configure(SourceConfigurer configurer) {
     // add MySql JDBC Plugin usage at configure time
     configurer.usePluginClass("jdbc", conf.getJdbcPluginName(), conf.getJDBCPluginId(),
                               PluginProperties.builder().build());
