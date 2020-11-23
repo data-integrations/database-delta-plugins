@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
  * Sql Server table registry
@@ -99,7 +100,8 @@ public class SqlServerTableRegistry implements TableRegistry {
   }
 
   @Override
-  public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
+  public TableDetail describeTable(String db, String table, @Nullable String schema)
+    throws TableNotFoundException, IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
       List<Problem> missingFeatures = new ArrayList<>();
       DatabaseMetaData dbMeta = connection.getMetaData();

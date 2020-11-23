@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.annotation.Nullable;
 
 /**
  * Lists and describes tables.
@@ -79,8 +80,10 @@ public class MySqlTableRegistry implements TableRegistry {
   }
 
   @Override
-  public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
-    try (Connection connection = DriverManager.getConnection(getConnectionString(db), conf.getConnectionProperties())) {
+  public TableDetail describeTable(String db, String table, @Nullable String schema)
+    throws TableNotFoundException, IOException {
+    try (Connection connection = DriverManager
+      .getConnection(getConnectionString(db), conf.getConnectionProperties())) {
       DatabaseMetaData dbMeta = connection.getMetaData();
       TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, table)
         .orElseThrow(() -> new TableNotFoundException(db, table, ""));
