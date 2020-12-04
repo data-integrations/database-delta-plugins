@@ -19,6 +19,7 @@ package io.cdap.delta.plugin.mock;
 import io.cdap.cdap.api.macro.MacroEvaluator;
 import io.cdap.cdap.api.metrics.Metrics;
 import io.cdap.cdap.api.plugin.PluginProperties;
+import io.cdap.delta.api.DeltaPipelineId;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.ReplicationError;
 
@@ -107,6 +108,11 @@ public class MockContext implements DeltaSourceContext {
   @Override
   public void putState(String s, byte[] bytes) {
     state.put(s, bytes);
+  }
+
+  @Override
+  public DeltaPipelineId getPipelineId() {
+    return new DeltaPipelineId("default", "app", 0L);
   }
 
   @Override
