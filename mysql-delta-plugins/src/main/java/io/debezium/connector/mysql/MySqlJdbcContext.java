@@ -5,19 +5,6 @@
  */
 package io.debezium.connector.mysql;
 
-import io.debezium.config.Configuration;
-import io.debezium.config.Configuration.Builder;
-import io.debezium.config.Field;
-import io.debezium.connector.mysql.MySqlConnectorConfig.EventProcessingFailureHandlingMode;
-import io.debezium.connector.mysql.MySqlConnectorConfig.SecureConnectionMode;
-import io.debezium.jdbc.JdbcConnection;
-import io.debezium.jdbc.JdbcConnection.ConnectionFactory;
-import io.debezium.relational.history.DatabaseHistory;
-import io.debezium.util.Strings;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,24 +14,46 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.connect.errors.ConnectException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import io.debezium.config.CommonConnectorConfig;
+import io.debezium.config.CommonConnectorConfig.EventProcessingFailureHandlingMode;
+import io.debezium.config.Configuration;
+import io.debezium.config.Configuration.Builder;
+import io.debezium.config.Field;
+import io.debezium.connector.mysql.MySqlConnectorConfig.SecureConnectionMode;
+import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.jdbc.JdbcConnection;
+import io.debezium.jdbc.JdbcConnection.ConnectionFactory;
+import io.debezium.relational.history.DatabaseHistory;
+import io.debezium.util.Strings;
+
 /**
  * A context for a JDBC connection to MySQL.
+ *
+ * @author Randall Hauch
  */
 public class MySqlJdbcContext implements AutoCloseable {
 
-  public static final String MYSQL_CONNECTION_URL =
-    "jdbc:mysql://${hostname}:${port}/?useInformationSchema=true&nullCatalogMeansCurrent=false&useSSL=${useSSL}&" +
-      "useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8&zeroDateTimeBehavior=CONVERT_TO_NULL";
+  /**
+   * ===================== This is a diff from the original file ===========================
+   * We intentionally make the 'MYSQL_CONNECTION_URL' a public static variable, so that we can set the value in app
+   * source.
+   */
+  public static final String MYSQL_CONNECTION_URL = "jdbc:mysql://${hostname}:${port}/?useInformationSchema=true&" +
+    "nullCatalogMeansCurrent=false&useSSL=${useSSL}&useUnicode=true&characterEncoding=UTF-8&" +
+    "characterSetResults=UTF-8&zeroDateTimeBehavior=CONVERT_TO_NULL&connectTimeout=${connectTimeout}";
   protected static final String JDBC_PROPERTY_LEGACY_DATETIME = "useLegacyDatetimeCode";
 
   private static final String SQL_SHOW_SYSTEM_VARIABLES = "SHOW VARIABLES";
-  private static final String SQL_SHOW_SYSTEM_VARIABLES_CHARACTER_SET =
-    "SHOW VARIABLES WHERE Variable_name IN ('character_set_server','collation_server')";
+  private static final String SQL_SHOW_SYSTEM_VARIABLES_CHARACTER_SET = "SHOW VARIABLES WHERE Variable_name IN ('character_set_server','collation_server')";
   private static final String SQL_SHOW_SESSION_VARIABLE_SSL_VERSION = "SHOW SESSION STATUS LIKE 'Ssl_version'";
 
   /**
    * ===================== This is a diff from the original file ===========================
-   * We intentionally make the 'connectionFactor' a public static variable, so that we can set the value in CDAP side.
+   * We intentionally make the 'connectionFactor' a public static variable, so that we can set the value in app source.
    */
   public static ConnectionFactory connectionFactory;
 
@@ -53,32 +62,37 @@ public class MySqlJdbcContext implements AutoCloseable {
   protected final JdbcConnection jdbc;
   private final Map<String, String> originalSystemProperties = new HashMap<>();
 
-  public MySqlJdbcContext(Configuration config) {
-    this.config = config; // must be set before most methods are used
+  public MySqlJdbcContext(MySqlConnectorConfig config) {
+    this.config = config.getConfig(); // must be set before most methods are used
 
     // Set up the JDBC connection without actually connecting, with extra MySQL-specific properties
     // to give us better JDBC database metadata behavior, including using UTF-8 for the client-side character encoding
     // per https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-charsets.html
     boolean useSSL = sslModeEnabled();
-    Configuration jdbcConfig = config
-      .filter(x -> !(x.startsWith(DatabaseHistory.CONFIGURATION_FIELD_PREFIX_STRING) ||
-        x.equals(MySqlConnectorConfig.DATABASE_HISTORY.name())))
+    Configuration jdbcConfig = this.config
+      .filter(x -> !(x.startsWith(DatabaseHistory.CONFIGURATION_FIELD_PREFIX_STRING) || x.equals(MySqlConnectorConfig.DATABASE_HISTORY.name())))
+      .edit()
+      .withDefault(MySqlConnectorConfig.PORT, MySqlConnectorConfig.PORT.defaultValue())
+      .build()
       .subset("database.", true);
 
     Builder jdbcConfigBuilder = jdbcConfig
       .edit()
+      .with("connectTimeout", Long.toString(config.getConnectionTimeout().toMillis()))
       .with("useSSL", Boolean.toString(useSSL));
 
     final String legacyDateTime = jdbcConfig.getString(JDBC_PROPERTY_LEGACY_DATETIME);
     if (legacyDateTime == null) {
       jdbcConfigBuilder.with(JDBC_PROPERTY_LEGACY_DATETIME, "false");
-    } else if ("true".equals(legacyDateTime)) {
-      logger.warn("'{}' is set to 'true'. This setting is not recommended and can result in timezone issues.",
-                  JDBC_PROPERTY_LEGACY_DATETIME);
+    }
+    else if ("true".equals(legacyDateTime)) {
+      logger.warn("'{}' is set to 'true'. This setting is not recommended and can result in timezone issues.", JDBC_PROPERTY_LEGACY_DATETIME);
     }
 
     jdbcConfig = jdbcConfigBuilder.build();
-    this.jdbc = new JdbcConnection(jdbcConfig, connectionFactory);
+    String driverClassName = jdbcConfig.getString(MySqlConnectorConfig.JDBC_DRIVER);
+    this.jdbc = new JdbcConnection(jdbcConfig,
+                                   JdbcConnection.patternBasedFactory(MYSQL_CONNECTION_URL, driverClassName, getClass().getClassLoader()));
   }
 
   public Configuration config() {
@@ -118,8 +132,11 @@ public class MySqlJdbcContext implements AutoCloseable {
     return sslMode() != SecureConnectionMode.DISABLED;
   }
 
-  public EventProcessingFailureHandlingMode eventDeserializationFailureHandlingMode() {
-    String mode = config.getString(MySqlConnectorConfig.EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE);
+  public EventProcessingFailureHandlingMode eventProcessingFailureHandlingMode() {
+    String mode = config.getString(CommonConnectorConfig.EVENT_PROCESSING_FAILURE_HANDLING_MODE);
+    if (mode == null) {
+      mode = config.getString(MySqlConnectorConfig.EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE);
+    }
     return EventProcessingFailureHandlingMode.parse(mode);
   }
 
@@ -142,14 +159,17 @@ public class MySqlJdbcContext implements AutoCloseable {
   public void shutdown() {
     try {
       jdbc.close();
-    } catch (SQLException e) {
+    }
+    catch (SQLException e) {
       logger.error("Unexpected error shutting down the database connection", e);
-    } finally {
+    }
+    finally {
       // Reset the system properties to their original value ...
       originalSystemProperties.forEach((name, value) -> {
         if (value != null) {
           System.setProperty(name, value);
-        } else {
+        }
+        else {
           System.clearProperty(name);
         }
       });
@@ -174,7 +194,8 @@ public class MySqlJdbcContext implements AutoCloseable {
           mode.set(rs.getString(2));
         }
       });
-    } catch (SQLException e) {
+    }
+    catch (SQLException e) {
       throw new ConnectException("Unexpected error while connecting to MySQL and looking at GTID mode: ", e);
     }
 
@@ -182,10 +203,9 @@ public class MySqlJdbcContext implements AutoCloseable {
   }
 
   /**
-   * Determine the available GTID set for MySQL.
+   * Determine the executed GTID set for MySQL.
    *
-   * @return the string representation of MySQL's GTID sets; never null but an empty string if the server does not use
-   * GTIDs
+   * @return the string representation of MySQL's GTID sets; never null but an empty string if the server does not use GTIDs
    */
   public String knownGtidSet() {
     AtomicReference<String> gtidSetStr = new AtomicReference<String>();
@@ -195,12 +215,37 @@ public class MySqlJdbcContext implements AutoCloseable {
           gtidSetStr.set(rs.getString(5)); // GTID set, may be null, blank, or contain a GTID set
         }
       });
-    } catch (SQLException e) {
+    }
+    catch (SQLException e) {
       throw new ConnectException("Unexpected error while connecting to MySQL and looking at GTID mode: ", e);
     }
 
     String result = gtidSetStr.get();
     return result != null ? result : "";
+  }
+
+  /**
+   * Determine the difference between two sets.
+   *
+   * @return a subtraction of two GTID sets; never null
+   */
+  public GtidSet subtractGtidSet(GtidSet set1, GtidSet set2) {
+    try {
+      return jdbc.prepareQueryAndMap("SELECT GTID_SUBTRACT(?, ?)",
+                                     ps -> {
+                                       ps.setString(1, set1.toString());
+                                       ps.setString(2, set2.toString());
+                                     },
+                                     rs -> {
+                                       if (rs.next()) {
+                                         return new GtidSet(rs.getString(1));
+                                       }
+                                       return new GtidSet("");
+                                     });
+    }
+    catch (SQLException e) {
+      throw new ConnectException("Unexpected error while connecting to MySQL and looking at GTID mode: ", e);
+    }
   }
 
   /**
@@ -216,7 +261,8 @@ public class MySqlJdbcContext implements AutoCloseable {
           gtidSetStr.set(rs.getString(1)); // GTID set, may be null, blank, or contain a GTID set
         }
       });
-    } catch (SQLException e) {
+    }
+    catch (SQLException e) {
       throw new ConnectException("Unexpected error while connecting to MySQL and looking at gtid_purged variable: ", e);
     }
 
@@ -251,9 +297,9 @@ public class MySqlJdbcContext implements AutoCloseable {
           }
         }
       });
-    } catch (SQLException e) {
-      throw new ConnectException("Unexpected error while connecting to MySQL and looking " +
-                                   "at privileges for current user: ", e);
+    }
+    catch (SQLException e) {
+      throw new ConnectException("Unexpected error while connecting to MySQL and looking at privileges for current user: ", e);
     }
     return result.get();
   }
@@ -287,6 +333,7 @@ public class MySqlJdbcContext implements AutoCloseable {
   private Map<String, String> querySystemVariables(String statement) {
     Map<String, String> variables = new HashMap<>();
     try {
+      start();
       jdbc.connect().query(statement, rs -> {
         while (rs.next()) {
           String varName = rs.getString(1);
@@ -299,7 +346,8 @@ public class MySqlJdbcContext implements AutoCloseable {
           }
         }
       });
-    } catch (SQLException e) {
+    }
+    catch (SQLException e) {
       throw new ConnectException("Error reading MySQL variables: " + e.getMessage(), e);
     }
 
@@ -314,7 +362,8 @@ public class MySqlJdbcContext implements AutoCloseable {
     for (String varName : varNames) {
       if (first) {
         first = false;
-      } else {
+      }
+      else {
         sb.append(", ");
       }
       sb.append(varName).append("=");
@@ -339,7 +388,8 @@ public class MySqlJdbcContext implements AutoCloseable {
         // There was no existing property ...
         String existing = System.setProperty(property, value);
         originalSystemProperties.put(property, existing); // the existing value may be null
-      } else {
+      }
+      else {
         existingValue = existingValue.trim();
         if (!existingValue.equalsIgnoreCase(value)) {
           // There was an existing property, and the value is different ...
@@ -363,12 +413,11 @@ public class MySqlJdbcContext implements AutoCloseable {
    * @return the session variables that are related to sessions ssl version
    */
   protected String getSessionVariableForSslVersion() {
-    final String sslVersion = "Ssl_version";
+    final String SSL_VERSION = "Ssl_version";
     logger.debug("Reading MySQL Session variable for Ssl Version");
-    Map<String, String> sessionVariables =
-      querySystemVariables(SQL_SHOW_SESSION_VARIABLE_SSL_VERSION);
-    if (!sessionVariables.isEmpty() && sessionVariables.containsKey(sslVersion)) {
-      return sessionVariables.get(sslVersion);
+    Map<String, String> sessionVariables = querySystemVariables(SQL_SHOW_SESSION_VARIABLE_SSL_VERSION);
+    if (!sessionVariables.isEmpty() && sessionVariables.containsKey(SSL_VERSION)) {
+      return sessionVariables.get(SSL_VERSION);
     }
     return null;
   }
