@@ -22,7 +22,7 @@
 
   <groupId>io.cdap.delta</groupId>
   <artifactId>database-delta-plugins</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.3.0-SNAPSHOT</version>
   <modules>
     <module>mysql-delta-plugins</module>
     <module>delta-plugins-common</module>
@@ -60,7 +60,7 @@
 
   <properties>
     <debezium.version>0.9.5.Final</debezium.version>
-    <delta.version>0.2.0-SNAPSHOT</delta.version>
+    <delta.version>0.3.0-SNAPSHOT</delta.version>
     <slf4j.version>1.7.25</slf4j.version>
   </properties>
 
