@@ -5,17 +5,6 @@
  */
 package io.debezium.connector.mysql;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.util.Random;
-
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigDef.Importance;
-import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigDef.Width;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.Configuration;
 import io.debezium.config.EnumeratedValue;
@@ -29,6 +18,16 @@ import io.debezium.jdbc.TemporalPrecisionMode;
 import io.debezium.relational.RelationalDatabaseConnectorConfig;
 import io.debezium.relational.history.DatabaseHistory;
 import io.debezium.relational.history.KafkaDatabaseHistory;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigDef.Width;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.Random;
 
 /**
  * The configuration properties.
@@ -36,7 +35,8 @@ import io.debezium.relational.history.KafkaDatabaseHistory;
 public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(MySqlConnectorConfig.class);
-  protected static final String DATABASE_INCLUDE_LIST_ALREADY_SPECIFIED_ERROR_MSG = "\"database.include.list\" or \"database.whitelist\" is already specified";
+  protected static final String DATABASE_INCLUDE_LIST_ALREADY_SPECIFIED_ERROR_MSG
+    = "\"database.include.list\" or \"database.whitelist\" is already specified";
 
   /**
    * The set of predefined BigIntUnsignedHandlingMode options or aliases.
@@ -56,7 +56,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
     private final String value;
 
-    private BigIntUnsignedHandlingMode(String value) {
+    BigIntUnsignedHandlingMode(String value) {
       this.value = value;
     }
 
@@ -113,7 +113,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
   /**
    * The set of predefined SnapshotMode options or aliases.
    */
-  public static enum SnapshotMode implements EnumeratedValue {
+  public enum SnapshotMode implements EnumeratedValue {
 
     /**
      * Perform a snapshot when it is needed.
@@ -133,10 +133,11 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     SCHEMA_ONLY("schema_only", false),
 
     /**
-     * Perform a snapshot of only the database schemas (without data) and then begin reading the binlog at the current binlog position.
-     * This can be used for recovery only if the connector has existing offsets and the database.history.kafka.topic does not exist (deleted).
-     * This recovery option should be used with care as it assumes there have been no schema changes since the connector last stopped,
-     * otherwise some events during the gap may be processed with an incorrect schema and corrupted.
+     * Perform a snapshot of only the database schemas (without data) and then begin reading the binlog at the current
+     * binlog position. This can be used for recovery only if the connector has existing offsets and the
+     * database.history.kafka.topic does not exist (deleted). This recovery option should be used with care as it
+     * assumes there have been no schema changes since the connector last stopped, otherwise some events during the
+     * gap may be processed with an incorrect schema and corrupted.
      */
     SCHEMA_ONLY_RECOVERY("schema_only_recovery", false),
 
@@ -154,7 +155,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     private final String value;
     private final boolean includeData;
 
-    private SnapshotMode(String value, boolean includeData) {
+    SnapshotMode(String value, boolean includeData) {
       this.value = value;
       this.includeData = includeData;
     }
@@ -207,7 +208,10 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     }
   }
 
-  public static enum SnapshotNewTables implements EnumeratedValue {
+  /**
+   *
+   */
+  public enum SnapshotNewTables implements EnumeratedValue {
     /**
      * Do not snapshot new tables
      */
@@ -220,7 +224,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
     private final String value;
 
-    private SnapshotNewTables(String value) {
+    SnapshotNewTables(String value) {
       this.value = value;
     }
 
@@ -267,7 +271,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
   /**
    * The set of predefined Snapshot Locking Mode options.
    */
-  public static enum SnapshotLockingMode implements EnumeratedValue {
+  public enum SnapshotLockingMode implements EnumeratedValue {
 
     /**
      * This mode will block all writes for the entire duration of the snapshot.
@@ -277,33 +281,33 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     EXTENDED("extended"),
 
     /**
-     * The connector holds the global read lock for just the initial portion of the snapshot while the connector reads the database
-     * schemas and other metadata. The remaining work in a snapshot involves selecting all rows from each table, and this can be done
-     * in a consistent fashion using the REPEATABLE READ transaction even when the global read lock is no longer held and while other
-     * MySQL clients are updating the database.
+     * The connector holds the global read lock for just the initial portion of the snapshot while the connector reads
+     * the database schemas and other metadata. The remaining work in a snapshot involves selecting all rows from each
+     * table, and this can be done in a consistent fashion using the REPEATABLE READ transaction even when the global
+     * read lock is no longer held and while other MySQL clients are updating the database.
      *
      * Replaces deprecated configuration option snapshot.locking.minimal with a value of true.
      */
     MINIMAL("minimal"),
 
     /**
-     * The connector holds a (Percona-specific) backup lock for just the initial portion of the snapshot while the connector
-     * reads the database schemas and other metadata. This lock will only block DDL and DML on non-transactional tables
-     * (MyISAM etc.). The remaining work in a snapshot involves selecting all rows from each table, and this can be done in a
-     * consistent fashion using the REPEATABLE READ transaction even when the global read lock is no longer held and while other
-     * MySQL clients are updating the database.
+     * The connector holds a (Percona-specific) backup lock for just the initial portion of the snapshot while the
+     * connector reads the database schemas and other metadata. This lock will only block DDL and DML on
+     * non-transactional tables (MyISAM etc.). The remaining work in a snapshot involves selecting all rows from each
+     * table, and this can be done in a consistent fashion using the REPEATABLE READ transaction even when the global
+     * read lock is no longer held and while other MySQL clients are updating the database.
      */
     MINIMAL_PERCONA("minimal_percona"),
 
     /**
-     * This mode will avoid using ANY table locks during the snapshot process.  This mode can only be used with SnapShotMode
-     * set to schema_only or schema_only_recovery.
+     * This mode will avoid using ANY table locks during the snapshot process.  This mode can only be used with
+     * SnapShotMode set to schema_only or schema_only_recovery.
      */
     NONE("none");
 
     private final String value;
 
-    private SnapshotLockingMode(String value) {
+    SnapshotLockingMode(String value) {
       this.value = value;
     }
 
@@ -324,8 +328,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     public String getLockStatement() {
       if (value.equals(MINIMAL_PERCONA.value)) {
         return "LOCK TABLES FOR BACKUP";
-      }
-      else {
+      } else {
         return "FLUSH TABLES WITH READ LOCK";
       }
     }
@@ -368,7 +371,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
   /**
    * The set of predefined SecureConnectionMode options or aliases.
    */
-  public static enum SecureConnectionMode implements EnumeratedValue {
+  public enum SecureConnectionMode implements EnumeratedValue {
     /**
      * Establish an unencrypted connection.
      */
@@ -397,7 +400,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
     private final String value;
 
-    private SecureConnectionMode(String value) {
+    SecureConnectionMode(String value) {
       this.value = value;
     }
 
@@ -444,7 +447,7 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
   /**
    * The set of predefined Gtid New Channel Position options.
    */
-  public static enum GtidNewChannelPosition implements EnumeratedValue {
+  public enum GtidNewChannelPosition implements EnumeratedValue {
 
     /**
      * This mode will start reading new gtid channel from mysql servers last_executed position
@@ -453,13 +456,14 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
     /**
      * This mode will start reading new gtid channel from earliest available position in server.
-     * This is needed when during active-passive failover the new gtid channel becomes active and receiving writes. #DBZ-923
+     * This is needed when during active-passive failover the new gtid channel becomes active and receiving writes.
+     * #DBZ-923
      */
     EARLIEST("earliest");
 
     private final String value;
 
-    private GtidNewChannelPosition(String value) {
+    GtidNewChannelPosition(String value) {
       this.value = value;
     }
 
@@ -560,9 +564,12 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.LONG)
     .withImportance(Importance.LOW)
     .withDescription(
-      "A semicolon separated list of SQL statements to be executed when a JDBC connection (not binlog reading connection) to the database is established. "
-        + "Note that the connector may establish JDBC connections at its own discretion, so this should typically be used for configuration of session parameters only,"
-        + "but not for executing DML statements. Use doubled semicolon (';;') to use a semicolon as a character and not as a delimiter.");
+      "A semicolon separated list of SQL statements to be executed when a JDBC connection (not binlog reading " +
+        "connection) to the database is established. "
+        + "Note that the connector may establish JDBC connections at its own discretion, so this should typically be " +
+        "used for configuration of session parameters only,"
+        + "but not for executing DML statements. Use doubled semicolon (';;') to use a semicolon as a character and " +
+        "not as a delimiter.");
 
   public static final Field SERVER_NAME = RelationalDatabaseConnectorConfig.SERVER_NAME
     .withValidation(CommonConnectorConfig::validateServerNameIsDifferentFromHistoryTopicName);
@@ -597,19 +604,22 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.MEDIUM)
     .withDescription("Whether to use an encrypted connection to MySQL. Options include"
                        + "'disabled' (the default) to use an unencrypted connection; "
-                       + "'preferred' to establish a secure (encrypted) connection if the server supports secure connections, "
-                       + "but fall back to an unencrypted connection otherwise; "
+                       + "'preferred' to establish a secure (encrypted) connection if the server supports secure "
+                       + "connections, but fall back to an unencrypted connection otherwise; "
                        + "'required' to use a secure (encrypted) connection, and fail if one cannot be established; "
-                       + "'verify_ca' like 'required' but additionally verify the server TLS certificate against the configured Certificate Authority "
+                       + "'verify_ca' like 'required' but additionally verify the server TLS certificate against the "
+                       + "configured Certificate Authority "
                        + "(CA) certificates, or fail if no valid matching CA certificates are found; or"
-                       + "'verify_identity' like 'verify_ca' but additionally verify that the server certificate matches the host to which the connection is attempted.");
+                       + "'verify_identity' like 'verify_ca' but additionally verify that the server certificate "
+                       + "matches the host to which the connection is attempted.");
 
   public static final Field SSL_KEYSTORE = Field.create("database.ssl.keystore")
     .withDisplayName("SSL Keystore")
     .withType(Type.STRING)
     .withWidth(Width.LONG)
     .withImportance(Importance.MEDIUM)
-    .withDescription("Location of the Java keystore file containing an application process's own certificate and private key.");
+    .withDescription("Location of the Java keystore file containing an application process's own certificate and " +
+                       "private key.");
 
   public static final Field SSL_KEYSTORE_PASSWORD = Field.create("database.ssl.keystore.password")
     .withDisplayName("SSL Keystore Password")
@@ -617,15 +627,17 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.MEDIUM)
     .withImportance(Importance.MEDIUM)
     .withDescription(
-      "Password to access the private key from the keystore file specified by 'ssl.keystore' configuration property or the 'javax.net.ssl.keyStore' system or JVM property. "
-        + "This password is used to unlock the keystore file (store password), and to decrypt the private key stored in the keystore (key password).");
+      "Password to access the private key from the keystore file specified by 'ssl.keystore' configuration property " +
+        "or the 'javax.net.ssl.keyStore' system or JVM property. This password is used to unlock the keystore file " +
+        "(store password), and to decrypt the private key stored in the keystore (key password).");
 
   public static final Field SSL_TRUSTSTORE = Field.create("database.ssl.truststore")
     .withDisplayName("SSL Truststore")
     .withType(Type.STRING)
     .withWidth(Width.LONG)
     .withImportance(Importance.MEDIUM)
-    .withDescription("Location of the Java truststore file containing the collection of CA certificates trusted by this application process (trust store).");
+    .withDescription("Location of the Java truststore file containing the collection of CA certificates trusted by " +
+                       "this application process (trust store).");
 
   public static final Field SSL_TRUSTSTORE_PASSWORD = Field.create("database.ssl.truststore.password")
     .withDisplayName("SSL Truststore Password")
@@ -633,7 +645,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.MEDIUM)
     .withImportance(Importance.MEDIUM)
     .withDescription(
-      "Password to unlock the keystore file (store password) specified by 'ssl.trustore' configuration property or the 'javax.net.ssl.trustStore' system or JVM property.");
+      "Password to unlock the keystore file (store password) specified by 'ssl.trustore' configuration property or " +
+        "the 'javax.net.ssl.trustStore' system or JVM property.");
 
   public static final Field TABLES_IGNORE_BUILTIN = RelationalDatabaseConnectorConfig.TABLE_IGNORE_BUILTIN
     .withDependents(DATABASE_INCLUDE_LIST_NAME);
@@ -673,7 +686,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.LOW)
     .withInvisibleRecommender()
     .withDependents(TABLE_INCLUDE_LIST_NAME)
-    .withDescription("The databases for which changes are to be captured (deprecated, use \"" + DATABASE_INCLUDE_LIST.name() + "\" instead)");
+    .withDescription("The databases for which changes are to be captured (deprecated, use \""
+                       + DATABASE_INCLUDE_LIST.name() + "\" instead)");
 
   /**
    * A comma-separated list of regular expressions that match database names to be excluded from monitoring.
@@ -686,7 +700,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.MEDIUM)
     .withValidation(MySqlConnectorConfig::validateDatabaseExcludeList)
     .withInvisibleRecommender()
-    .withDescription("A comma-separated list of regular expressions that match database names to be excluded from monitoring");
+    .withDescription("A comma-separated list of regular expressions that match database names to be excluded from " +
+                       "monitoring");
 
   /**
    * Old, backwards-compatible "blacklist" property.
@@ -699,7 +714,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.LOW)
     .withValidation(MySqlConnectorConfig::validateDatabaseExcludeList)
     .withInvisibleRecommender()
-    .withDescription("A comma-separated list of regular expressions that match database names to be excluded from monitoring (deprecated, use \""
+    .withDescription("A comma-separated list of regular expressions that match database names to be excluded from " +
+                       "monitoring (deprecated, use \""
                        + DATABASE_EXCLUDE_LIST.name() + "\" instead)");
 
   /**
@@ -714,7 +730,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.LONG)
     .withImportance(Importance.HIGH)
     .withDependents(TABLE_INCLUDE_LIST_NAME)
-    .withDescription("The source UUIDs used to include GTID ranges when determine the starting position in the MySQL server's binlog.");
+    .withDescription("The source UUIDs used to include GTID ranges when determine the starting position in the MySQL " +
+                       "server's binlog.");
 
   /**
    * A comma-separated list of regular expressions that match source UUIDs in the GTID set used to find the binlog
@@ -729,7 +746,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.MEDIUM)
     .withValidation(MySqlConnectorConfig::validateGtidSetExcludes)
     .withInvisibleRecommender()
-    .withDescription("The source UUIDs used to exclude GTID ranges when determine the starting position in the MySQL server's binlog.");
+    .withDescription("The source UUIDs used to exclude GTID ranges when determine the starting position in the MySQL " +
+                       "server's binlog.");
 
   /**
    * If set to true, we will only produce DML events into Kafka for transactions that were written on MySQL servers
@@ -747,12 +765,15 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.MEDIUM)
     .withDefault(true)
     .withDescription(
-      "If set to true, we will only produce DML events into Kafka for transactions that were written on mysql servers with UUIDs matching the filters defined by the gtid.source.includes or gtid.source.excludes configuration options, if they are specified.");
+      "If set to true, we will only produce DML events into Kafka for transactions that were written on mysql " +
+        "servers with UUIDs matching the filters defined by the gtid.source.includes or gtid.source.excludes " +
+        "configuration options, if they are specified.");
 
   /**
-   * If set to 'latest', connector when encountering new GTID channel after job restart will start reading it from the
-   * latest executed position (default). When set to 'earliest' the connector will start reading new GTID channels from the first available position.
-   * This is useful when in active-passive mysql setup during failover new GTID channel starts receiving writes, see DBZ-923.
+   * If set to 'latest', connector when encountering new GTID channel after job restart will start reading it from
+   * the latest executed position (default). When set to 'earliest' the connector will start reading new GTID channels
+   * from the first available position. This is useful when in active-passive mysql setup during failover new GTID
+   * channel starts receiving writes, see DBZ-923.
    *
    * Defaults to latest.
    */
@@ -763,7 +784,9 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.MEDIUM)
     .withValidation(MySqlConnectorConfig::validateGtidNewChannelPositionNotSet)
     .withDescription(
-      "If set to 'latest', when connector sees new GTID, it will start consuming gtid channel from the server latest executed gtid position. If 'earliest' (the default) connector starts reading channel from first available (not purged) gtid position on the server.");
+      "If set to 'latest', when connector sees new GTID, it will start consuming gtid channel from the server latest " +
+        "executed gtid position. If 'earliest' (the default) connector starts reading channel from first available " +
+        "(not purged) gtid position on the server.");
 
   public static final Field CONNECTION_TIMEOUT_MS = Field.create("connect.timeout.ms")
     .withDisplayName("Connection Timeout (ms)")
@@ -816,8 +839,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withValidation(Field::isNonNegativeInteger);
 
   /**
-   * The database history class is hidden in the {@link #configDef()} since that is designed to work with a user interface,
-   * and in these situations using Kafka is the only way to go.
+   * The database history class is hidden in the {@link #configDef()} since that is designed to work with a user
+   * interface, and in these situations using Kafka is the only way to go.
    */
   public static final Field DATABASE_HISTORY = Field.create("database.history")
     .withDisplayName("Database history class")
@@ -825,7 +848,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.LONG)
     .withImportance(Importance.LOW)
     .withInvisibleRecommender()
-    .withDescription("The name of the DatabaseHistory class that should be used to store and recover database schema changes. "
+    .withDescription("The name of the DatabaseHistory class that should be used to store and recover database schema " +
+                       "changes. "
                        + "The configuration properties for the history are prefixed with the '"
                        + DatabaseHistory.CONFIGURATION_FIELD_PREFIX_STRING + "' string.")
     .withDefault(KafkaDatabaseHistory.class.getName());
@@ -836,8 +860,10 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.SHORT)
     .withImportance(Importance.MEDIUM)
     .withDescription("Whether the connector should include the original SQL query that generated the change event. "
-                       + "Note: This option requires MySQL be configured with the binlog_rows_query_log_events option set to ON. Query will not be present for events generated from snapshot. "
-                       + "WARNING: Enabling this option may expose tables or fields explicitly blacklisted or masked by including the original SQL statement in the change event. "
+                       + "Note: This option requires MySQL be configured with the binlog_rows_query_log_events " +
+                       "option set to ON. Query will not be present for events generated from snapshot. "
+                       + "WARNING: Enabling this option may expose tables or fields explicitly blacklisted or masked " +
+                       "by including the original SQL statement in the change event. "
                        + "For this reason the default value is 'false'.")
     .withDefault(false);
 
@@ -848,26 +874,39 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withImportance(Importance.LOW)
     .withDescription("The criteria for running a snapshot upon startup of the connector. "
                        + "Options include: "
-                       + "'when_needed' to specify that the connector run a snapshot upon startup whenever it deems it necessary; "
+                       + "'when_needed' to specify that the connector run a snapshot upon startup whenever it " +
+                       "deems it necessary; "
                        + "'schema_only' to only take a snapshot of the schema (table structures) but no actual data; "
-                       + "'initial' (the default) to specify the connector can run a snapshot only when no offsets are available for the logical server name; "
-                       + "'initial_only' same as 'initial' except the connector should stop after completing the snapshot and before it would normally read the binlog; and"
-                       + "'never' to specify the connector should never run a snapshot and that upon first startup the connector should read from the beginning of the binlog. "
-                       + "The 'never' mode should be used with care, and only when the binlog is known to contain all history.");
+                       + "'initial' (the default) to specify the connector can run a snapshot only when no offsets" +
+                       " are available for the logical server name; "
+                       + "'initial_only' same as 'initial' except the connector should stop after completing the " +
+                       "snapshot and before it would normally read the binlog; and"
+                       + "'never' to specify the connector should never run a snapshot and that upon first startup" +
+                       " the connector should read from the beginning of the binlog. "
+                       + "The 'never' mode should be used with care, and only when the binlog is known to contain" +
+                       " all history.");
 
   public static final Field SNAPSHOT_LOCKING_MODE = Field.create("snapshot.locking.mode")
     .withDisplayName("Snapshot locking mode")
     .withEnum(SnapshotLockingMode.class, SnapshotLockingMode.MINIMAL)
     .withWidth(Width.SHORT)
     .withImportance(Importance.LOW)
-    .withDescription("Controls how long the connector holds onto the global read lock while it is performing a snapshot. The default is 'minimal', "
-                       + "which means the connector holds the global read lock (and thus prevents any updates) for just the initial portion of the snapshot "
-                       + "while the database schemas and other metadata are being read. The remaining work in a snapshot involves selecting all rows from "
-                       + "each table, and this can be done using the snapshot process' REPEATABLE READ transaction even when the lock is no longer held and "
-                       + "other operations are updating the database. However, in some cases it may be desirable to block all writes for the entire duration "
-                       + "of the snapshot; in such cases set this property to 'extended'. Using a value of 'none' will prevent the connector from acquiring any "
-                       + "table locks during the snapshot process. This mode can only be used in combination with snapshot.mode values of 'schema_only' or "
-                       + "'schema_only_recovery' and is only safe to use if no schema changes are happening while the snapshot is taken.")
+    .withDescription("Controls how long the connector holds onto the global read lock while it is performing a " +
+                       "snapshot. The default is 'minimal', "
+                       + "which means the connector holds the global read lock (and thus prevents any updates) for " +
+                       "just the initial portion of the snapshot "
+                       + "while the database schemas and other metadata are being read. The remaining work in a " +
+                       "snapshot involves selecting all rows from "
+                       + "each table, and this can be done using the snapshot process' REPEATABLE READ transaction " +
+                       "even when the lock is no longer held and "
+                       + "other operations are updating the database. However, in some cases it may be desirable " +
+                       "to block all writes for the entire duration "
+                       + "of the snapshot; in such cases set this property to 'extended'. Using a value of 'none'" +
+                       " will prevent the connector from acquiring any "
+                       + "table locks during the snapshot process. This mode can only be used in combination with" +
+                       " snapshot.mode values of 'schema_only' or "
+                       + "'schema_only_recovery' and is only safe to use if no schema changes are happening while " +
+                       "the snapshot is taken.")
     .withValidation(MySqlConnectorConfig::validateSnapshotLockingMode);
 
   public static final Field SNAPSHOT_NEW_TABLES = Field.create("snapshot.new.tables")
@@ -875,20 +914,27 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withEnum(SnapshotNewTables.class, SnapshotNewTables.OFF)
     .withWidth(Width.SHORT)
     .withImportance(Importance.LOW)
-    .withDescription("BETA FEATURE: On connector restart, the connector will check if there have been any new tables added to the configuration, "
+    .withDescription("BETA FEATURE: On connector restart, the connector will check if there have been any new tables" +
+                       " added to the configuration, "
                        + "and snapshot them. There is presently only two options:"
                        + "'off': Default behavior. Do not snapshot new tables."
-                       + "'parallel': The snapshot of the new tables will occur in parallel to the continued binlog reading of the old tables. When the snapshot "
-                       + "completes, an independent binlog reader will begin reading the events for the new tables until it catches up to present time. At this "
-                       + "point, both old and new binlog readers will be momentarily halted and new binlog reader will start that will read the binlog for all "
-                       + "configured tables. The parallel binlog reader will have a configured server id of 10000 + the primary binlog reader's server id.");
+                       + "'parallel': The snapshot of the new tables will occur in parallel to the continued binlog" +
+                       " reading of the old tables. When the snapshot "
+                       + "completes, an independent binlog reader will begin reading the events for the new tables" +
+                       " until it catches up to present time. At this "
+                       + "point, both old and new binlog readers will be momentarily halted and new binlog reader" +
+                       " will start that will read the binlog for all "
+                       + "configured tables. The parallel binlog reader will have a configured server id of " +
+                       "10000 + the primary binlog reader's server id.");
 
   public static final Field TIME_PRECISION_MODE = RelationalDatabaseConnectorConfig.TIME_PRECISION_MODE
     .withEnum(TemporalPrecisionMode.class, TemporalPrecisionMode.ADAPTIVE_TIME_MICROSECONDS)
     .withValidation(MySqlConnectorConfig::validateTimePrecisionMode)
     .withDescription("Time, date and timestamps can be represented with different kinds of precisions, including:"
-                       + "'adaptive_time_microseconds': the precision of date and timestamp values is based the database column's precision; but time fields always use microseconds precision;"
-                       + "'connect': always represents time, date and timestamp values using Kafka Connect's built-in representations for Time, Date, and Timestamp, "
+                       + "'adaptive_time_microseconds': the precision of date and timestamp values is based the " +
+                       "database column's precision; but time fields always use microseconds precision;"
+                       + "'connect': always represents time, date and timestamp values using Kafka Connect's " +
+                       "built-in representations for Time, Date, and Timestamp, "
                        + "which uses millisecond precision regardless of the database columns' precision.");
 
   public static final Field BIGINT_UNSIGNED_HANDLING_MODE = Field.create("bigint.unsigned.handling.mode")
@@ -897,18 +943,25 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.SHORT)
     .withImportance(Importance.MEDIUM)
     .withDescription("Specify how BIGINT UNSIGNED columns should be represented in change events, including:"
-                       + "'precise' uses java.math.BigDecimal to represent values, which are encoded in the change events using a binary representation and Kafka Connect's 'org.apache.kafka.connect.data.Decimal' type; "
-                       + "'long' (the default) represents values using Java's 'long', which may not offer the precision but will be far easier to use in consumers.");
+                       + "'precise' uses java.math.BigDecimal to represent values, which are encoded in the change" +
+                       " events using a binary representation and Kafka Connect's " +
+                       "'org.apache.kafka.connect.data.Decimal' type; "
+                       + "'long' (the default) represents values using Java's 'long', which may not offer the" +
+                       " precision but will be far easier to use in consumers.");
 
-  public static final Field EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE = Field.create("event.deserialization.failure.handling.mode")
+  public static final Field EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE
+    = Field.create("event.deserialization.failure.handling.mode")
     .withDisplayName("Event deserialization failure handling")
     .withEnum(EventProcessingFailureHandlingMode.class, EventProcessingFailureHandlingMode.FAIL)
     .withValidation(MySqlConnectorConfig::validateEventDeserializationFailureHandlingModeNotSet)
     .withWidth(Width.SHORT)
     .withImportance(Importance.MEDIUM)
-    .withDescription("Specify how failures during deserialization of binlog events (i.e. when encountering a corrupted event) should be handled, including:"
-                       + "'fail' (the default) an exception indicating the problematic event and its binlog position is raised, causing the connector to be stopped; "
-                       + "'warn' the problematic event and its binlog position will be logged and the event will be skipped;"
+    .withDescription("Specify how failures during deserialization of binlog events (i.e. when encountering a" +
+                       " corrupted event) should be handled, including:"
+                       + "'fail' (the default) an exception indicating the problematic event and its binlog" +
+                       " position is raised, causing the connector to be stopped; "
+                       + "'warn' the problematic event and its binlog position will be logged and the event" +
+                       " will be skipped;"
                        + "'ignore' the problematic event will be skipped.");
 
   public static final Field INCONSISTENT_SCHEMA_HANDLING_MODE = Field.create("inconsistent.schema.handling.mode")
@@ -918,8 +971,10 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.SHORT)
     .withImportance(Importance.MEDIUM)
     .withDescription(
-      "Specify how binlog events that belong to a table missing from internal schema representation (i.e. internal representation is not consistent with database) should be handled, including:"
-        + "'fail' (the default) an exception indicating the problematic event and its binlog position is raised, causing the connector to be stopped; "
+      "Specify how binlog events that belong to a table missing from internal schema representation (i.e. internal" +
+        " representation is not consistent with database) should be handled, including:"
+        + "'fail' (the default) an exception indicating the problematic event and its binlog position is raised," +
+        " causing the connector to be stopped; "
         + "'warn' the problematic event and its binlog position will be logged and the event will be skipped;"
         + "'skip' the problematic event will be skipped.");
 
@@ -930,29 +985,36 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     .withWidth(Width.SHORT)
     .withImportance(Importance.LOW)
     .withDescription(
-      "MySQL allows user to insert year value as either 2-digit or 4-digit. In case of two digit the value is automatically mapped into 1970 - 2069." +
+      "MySQL allows user to insert year value as either 2-digit or 4-digit. In case of two digit the value is" +
+        " automatically mapped into 1970 - 2069." +
         "false - delegates the implicit conversion to the database" +
         "true - (the default) Debezium makes the conversion");
 
   /**
    * The set of {@link Field}s defined as part of this configuration.
    */
-  public static Field.Set ALL_FIELDS = Field.setOf(USER, PASSWORD, HOSTNAME, PORT, ON_CONNECT_STATEMENTS, SERVER_ID, SERVER_ID_OFFSET,
+  public static Field.Set ALL_FIELDS = Field.setOf(USER, PASSWORD, HOSTNAME, PORT, ON_CONNECT_STATEMENTS, SERVER_ID,
+                                                   SERVER_ID_OFFSET,
                                                    SERVER_NAME,
                                                    CONNECTION_TIMEOUT_MS, KEEP_ALIVE, KEEP_ALIVE_INTERVAL_MS,
                                                    CommonConnectorConfig.MAX_QUEUE_SIZE,
                                                    CommonConnectorConfig.MAX_BATCH_SIZE,
                                                    CommonConnectorConfig.POLL_INTERVAL_MS,
                                                    BUFFER_SIZE_FOR_BINLOG_READER, Heartbeat.HEARTBEAT_INTERVAL,
-                                                   Heartbeat.HEARTBEAT_TOPICS_PREFIX, DATABASE_HISTORY, INCLUDE_SCHEMA_CHANGES, INCLUDE_SQL_QUERY,
-                                                   TABLE_WHITELIST, TABLE_INCLUDE_LIST, TABLE_BLACKLIST, TABLE_EXCLUDE_LIST, TABLES_IGNORE_BUILTIN,
-                                                   DATABASE_WHITELIST, DATABASE_INCLUDE_LIST, DATABASE_BLACKLIST, DATABASE_EXCLUDE_LIST,
-                                                   COLUMN_BLACKLIST, COLUMN_EXCLUDE_LIST, COLUMN_INCLUDE_LIST, MSG_KEY_COLUMNS,
+                                                   Heartbeat.HEARTBEAT_TOPICS_PREFIX, DATABASE_HISTORY,
+                                                   INCLUDE_SCHEMA_CHANGES, INCLUDE_SQL_QUERY,
+                                                   TABLE_WHITELIST, TABLE_INCLUDE_LIST, TABLE_BLACKLIST,
+                                                   TABLE_EXCLUDE_LIST, TABLES_IGNORE_BUILTIN,
+                                                   DATABASE_WHITELIST, DATABASE_INCLUDE_LIST, DATABASE_BLACKLIST,
+                                                   DATABASE_EXCLUDE_LIST,
+                                                   COLUMN_BLACKLIST, COLUMN_EXCLUDE_LIST, COLUMN_INCLUDE_LIST,
+                                                   MSG_KEY_COLUMNS,
                                                    RelationalDatabaseConnectorConfig.MASK_COLUMN_WITH_HASH,
                                                    RelationalDatabaseConnectorConfig.MASK_COLUMN,
                                                    RelationalDatabaseConnectorConfig.TRUNCATE_COLUMN,
                                                    SNAPSHOT_MODE, SNAPSHOT_NEW_TABLES, SNAPSHOT_LOCKING_MODE,
-                                                   RelationalDatabaseConnectorConfig.SNAPSHOT_SELECT_STATEMENT_OVERRIDES_BY_TABLE,
+                                                   RelationalDatabaseConnectorConfig
+                                                     .SNAPSHOT_SELECT_STATEMENT_OVERRIDES_BY_TABLE,
                                                    GTID_SOURCE_INCLUDES, GTID_SOURCE_EXCLUDES,
                                                    GTID_SOURCE_FILTER_DML_EVENTS,
                                                    GTID_NEW_CHANNEL_POSITION,
@@ -972,9 +1034,9 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
   /**
    * The set of {@link Field}s that are included in the {@link #configDef() configuration definition}. This includes
-   * all fields defined in this class (though some are always invisible since they are not to be exposed to the user interface)
-   * plus several that are specific to the {@link KafkaDatabaseHistory} class, since history is always stored in Kafka
-   * when run via the user interface.
+   * all fields defined in this class (though some are always invisible since they are not to be exposed to the user
+   * interface) plus several that are specific to the {@link KafkaDatabaseHistory} class, since history is always
+   * stored in Kafka when run via the user interface.
    */
   protected static Field.Set EXPOSED_FIELDS = ALL_FIELDS.with(KafkaDatabaseHistory.BOOTSTRAP_SERVERS,
                                                               KafkaDatabaseHistory.TOPIC,
@@ -999,13 +1061,17 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
       DEFAULT_SNAPSHOT_FETCH_SIZE);
 
     this.temporalPrecisionMode = TemporalPrecisionMode.parse(config.getString(TIME_PRECISION_MODE));
-    this.snapshotLockingMode = SnapshotLockingMode.parse(config.getString(SNAPSHOT_LOCKING_MODE), SNAPSHOT_LOCKING_MODE.defaultValueAsString());
+    this.snapshotLockingMode = SnapshotLockingMode.parse(config.getString(SNAPSHOT_LOCKING_MODE),
+                                                         SNAPSHOT_LOCKING_MODE.defaultValueAsString());
 
     String gitIdNewChannelPosition = config.getString(MySqlConnectorConfig.GTID_NEW_CHANNEL_POSITION);
-    this.gitIdNewChannelPosition = GtidNewChannelPosition.parse(gitIdNewChannelPosition, MySqlConnectorConfig.GTID_NEW_CHANNEL_POSITION.defaultValueAsString());
+    this.gitIdNewChannelPosition
+      = GtidNewChannelPosition.parse(gitIdNewChannelPosition,
+                                     MySqlConnectorConfig.GTID_NEW_CHANNEL_POSITION.defaultValueAsString());
 
     String snapshotNewTables = config.getString(MySqlConnectorConfig.SNAPSHOT_NEW_TABLES);
-    this.snapshotNewTables = SnapshotNewTables.parse(snapshotNewTables, MySqlConnectorConfig.SNAPSHOT_NEW_TABLES.defaultValueAsString());
+    this.snapshotNewTables = SnapshotNewTables.parse(snapshotNewTables,
+                                                     MySqlConnectorConfig.SNAPSHOT_NEW_TABLES.defaultValueAsString());
 
     this.connectionTimeout = Duration.ofMillis(config.getLong(MySqlConnectorConfig.CONNECTION_TIMEOUT_MS));
   }
@@ -1024,8 +1090,10 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
 
   protected static ConfigDef configDef() {
     ConfigDef config = new ConfigDef();
-    Field.group(config, "MySQL", HOSTNAME, PORT, USER, PASSWORD, ON_CONNECT_STATEMENTS, SERVER_NAME, SERVER_ID, SERVER_ID_OFFSET,
-                SSL_MODE, SSL_KEYSTORE, SSL_KEYSTORE_PASSWORD, SSL_TRUSTSTORE, SSL_TRUSTSTORE_PASSWORD, JDBC_DRIVER, CommonConnectorConfig.SKIPPED_OPERATIONS);
+    Field.group(config, "MySQL", HOSTNAME, PORT, USER, PASSWORD, ON_CONNECT_STATEMENTS, SERVER_NAME, SERVER_ID,
+                SERVER_ID_OFFSET,
+                SSL_MODE, SSL_KEYSTORE, SSL_KEYSTORE_PASSWORD, SSL_TRUSTSTORE, SSL_TRUSTSTORE_PASSWORD, JDBC_DRIVER,
+                CommonConnectorConfig.SKIPPED_OPERATIONS);
     Field.group(config, "History Storage", KafkaDatabaseHistory.BOOTSTRAP_SERVERS,
                 KafkaDatabaseHistory.TOPIC, KafkaDatabaseHistory.RECOVERY_POLL_ATTEMPTS,
                 KafkaDatabaseHistory.RECOVERY_POLL_INTERVAL_MS, DATABASE_HISTORY,
@@ -1039,25 +1107,32 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
                 RelationalDatabaseConnectorConfig.MASK_COLUMN,
                 RelationalDatabaseConnectorConfig.TRUNCATE_COLUMN,
                 RelationalDatabaseConnectorConfig.SNAPSHOT_SELECT_STATEMENT_OVERRIDES_BY_TABLE,
-                GTID_SOURCE_INCLUDES, GTID_SOURCE_EXCLUDES, GTID_SOURCE_FILTER_DML_EVENTS, GTID_NEW_CHANNEL_POSITION, BUFFER_SIZE_FOR_BINLOG_READER,
-                Heartbeat.HEARTBEAT_INTERVAL, Heartbeat.HEARTBEAT_TOPICS_PREFIX, EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE,
+                GTID_SOURCE_INCLUDES, GTID_SOURCE_EXCLUDES, GTID_SOURCE_FILTER_DML_EVENTS, GTID_NEW_CHANNEL_POSITION,
+                BUFFER_SIZE_FOR_BINLOG_READER,
+                Heartbeat.HEARTBEAT_INTERVAL, Heartbeat.HEARTBEAT_TOPICS_PREFIX,
+                EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE,
                 CommonConnectorConfig.EVENT_PROCESSING_FAILURE_HANDLING_MODE, INCONSISTENT_SCHEMA_HANDLING_MODE,
                 CommonConnectorConfig.TOMBSTONES_ON_DELETE, CommonConnectorConfig.SOURCE_STRUCT_MAKER_VERSION);
-    Field.group(config, "Connector", CONNECTION_TIMEOUT_MS, KEEP_ALIVE, KEEP_ALIVE_INTERVAL_MS, CommonConnectorConfig.MAX_QUEUE_SIZE,
+    Field.group(config, "Connector", CONNECTION_TIMEOUT_MS, KEEP_ALIVE, KEEP_ALIVE_INTERVAL_MS,
+                CommonConnectorConfig.MAX_QUEUE_SIZE,
                 CommonConnectorConfig.MAX_BATCH_SIZE, CommonConnectorConfig.POLL_INTERVAL_MS,
                 SNAPSHOT_MODE, SNAPSHOT_LOCKING_MODE, SNAPSHOT_NEW_TABLES, TIME_PRECISION_MODE, DECIMAL_HANDLING_MODE,
-                BIGINT_UNSIGNED_HANDLING_MODE, SNAPSHOT_DELAY_MS, SNAPSHOT_FETCH_SIZE, ENABLE_TIME_ADJUSTER, BINARY_HANDLING_MODE);
+                BIGINT_UNSIGNED_HANDLING_MODE, SNAPSHOT_DELAY_MS, SNAPSHOT_FETCH_SIZE, ENABLE_TIME_ADJUSTER,
+                BINARY_HANDLING_MODE);
     return config;
   }
 
-  private static int validateGtidNewChannelPositionNotSet(Configuration config, Field field, ValidationOutput problems) {
+  private static int validateGtidNewChannelPositionNotSet(Configuration config, Field field,
+                                                          ValidationOutput problems) {
     if (config.getString(GTID_NEW_CHANNEL_POSITION.name()) != null) {
-      LOGGER.warn("Configuration option '{}' is deprecated and scheduled for removal", GTID_NEW_CHANNEL_POSITION.name());
+      LOGGER.warn("Configuration option '{}' is deprecated and scheduled for removal",
+                  GTID_NEW_CHANNEL_POSITION.name());
     }
     return 0;
   }
 
-  private static int validateEventDeserializationFailureHandlingModeNotSet(Configuration config, Field field, ValidationOutput problems) {
+  private static int validateEventDeserializationFailureHandlingModeNotSet(Configuration config, Field field,
+                                                                           ValidationOutput problems) {
     final String modeName = config.asMap().get(EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE.name());
     if (modeName != null) {
       LOGGER.warn("Configuration option '{}' is renamed to '{}'", EVENT_DESERIALIZATION_FAILURE_HANDLING_MODE.name(),
@@ -1072,7 +1147,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
     return 0;
   }
 
-  private static int validateInconsistentSchemaHandlingModeNotIgnore(Configuration config, Field field, ValidationOutput problems) {
+  private static int validateInconsistentSchemaHandlingModeNotIgnore(Configuration config, Field field,
+                                                                     ValidationOutput problems) {
     final String modeName = config.getString(INCONSISTENT_SCHEMA_HANDLING_MODE);
     if (EventProcessingFailureHandlingMode.OBSOLETE_NAME_FOR_SKIP_FAILURE_HANDLING.equals(modeName)) {
       LOGGER.warn("Value '{}' of configuration option '{}' is deprecated and should be replaced with '{}'",
@@ -1142,7 +1218,8 @@ public class MySqlConnectorConfig extends RelationalDatabaseConnectorConfig {
       final String timePrecisionMode = config.getString(TIME_PRECISION_MODE.name());
       if (TemporalPrecisionMode.ADAPTIVE.getValue().equals(timePrecisionMode)) {
         // this is a problem
-        problems.accept(TIME_PRECISION_MODE, timePrecisionMode, "The 'adaptive' time.precision.mode is no longer supported");
+        problems.accept(TIME_PRECISION_MODE, timePrecisionMode, "The 'adaptive' time.precision.mode is no " +
+          "longer supported");
         return 1;
       }
     }
