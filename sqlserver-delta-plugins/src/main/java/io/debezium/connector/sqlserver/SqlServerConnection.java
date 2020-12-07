@@ -6,6 +6,19 @@
 
 package io.debezium.connector.sqlserver;
 
+import io.debezium.config.CommonConnectorConfig;
+import io.debezium.config.Configuration;
+import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.jdbc.JdbcConnection;
+import io.debezium.relational.Column;
+import io.debezium.relational.ColumnEditor;
+import io.debezium.relational.Table;
+import io.debezium.relational.TableId;
+import io.debezium.util.BoundedConcurrentHashMap;
+import io.debezium.util.Clock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -23,20 +36,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import io.debezium.config.CommonConnectorConfig;
-import io.debezium.config.Configuration;
-import io.debezium.jdbc.JdbcConfiguration;
-import io.debezium.jdbc.JdbcConnection;
-import io.debezium.relational.Column;
-import io.debezium.relational.ColumnEditor;
-import io.debezium.relational.Table;
-import io.debezium.relational.TableId;
-import io.debezium.util.BoundedConcurrentHashMap;
-import io.debezium.util.Clock;
 
 /**
  * {@link JdbcConnection} extension to be used with Microsoft SQL Server
@@ -60,15 +59,18 @@ public class SqlServerConnection extends JdbcConnection {
   private static final String SQL_SERVER_VERSION = "SELECT @@VERSION AS 'SQL Server Version'";
   private final String lsnToTimestamp;
   private static final String INCREMENT_LSN = "SELECT sys.fn_cdc_increment_lsn(?)";
-  private static final String GET_ALL_CHANGES_FOR_TABLE = "SELECT * FROM cdc.[fn_cdc_get_all_changes_#](?, ?, N'all update old')";
+  private static final String GET_ALL_CHANGES_FOR_TABLE
+    = "SELECT * FROM cdc.[fn_cdc_get_all_changes_#](?, ?, N'all update old')";
   private static final String GET_LIST_OF_CDC_ENABLED_TABLES = "EXEC sys.sp_cdc_help_change_data_capture";
-  private static final String GET_LIST_OF_NEW_CDC_ENABLED_TABLES = "SELECT * FROM cdc.change_tables WHERE start_lsn BETWEEN ? AND ?";
+  private static final String GET_LIST_OF_NEW_CDC_ENABLED_TABLES
+    = "SELECT * FROM cdc.change_tables WHERE start_lsn BETWEEN ? AND ?";
   private static final String GET_LIST_OF_KEY_COLUMNS = "SELECT * FROM cdc.index_columns WHERE object_id=?";
   private static final Pattern BRACKET_PATTERN = Pattern.compile("[\\[\\]]");
 
   private static final int CHANGE_TABLE_DATA_COLUMN_OFFSET = 5;
 
-  private static final String URL_PATTERN = "jdbc:sqlserver://${" + JdbcConfiguration.HOSTNAME + "}:${" + JdbcConfiguration.PORT + "};databaseName=${"
+  private static final String URL_PATTERN = "jdbc:sqlserver://${" + JdbcConfiguration.HOSTNAME + "}:${"
+    + JdbcConfiguration.PORT + "};databaseName=${"
     + JdbcConfiguration.DATABASE + "}";
 
   // Note: this line is the only change from the original file. Renamed variable to factory and
@@ -95,7 +97,8 @@ public class SqlServerConnection extends JdbcConnection {
    * @param sourceTimestampMode strategy for populating {@code source.ts_ms}.
    * @param valueConverters {@link SqlServerValueConverters} instance
    */
-  public SqlServerConnection(Configuration config, Clock clock, SourceTimestampMode sourceTimestampMode, SqlServerValueConverters valueConverters) {
+  public SqlServerConnection(Configuration config, Clock clock, SourceTimestampMode sourceTimestampMode,
+                             SqlServerValueConverters valueConverters) {
     this(config, clock, sourceTimestampMode, valueConverters, null);
   }
 
@@ -108,9 +111,10 @@ public class SqlServerConnection extends JdbcConnection {
    * @param valueConverters {@link SqlServerValueConverters} instance
    * @param classLoaderSupplier class loader supplier
    */
-  public SqlServerConnection(Configuration config, Clock clock, SourceTimestampMode sourceTimestampMode, SqlServerValueConverters valueConverters,
+  public SqlServerConnection(Configuration config, Clock clock, SourceTimestampMode sourceTimestampMode,
+                             SqlServerValueConverters valueConverters,
                              Supplier<ClassLoader> classLoaderSupplier) {
-    super(config, FACTORY, classLoaderSupplier);
+    super(config, factory, classLoaderSupplier);
     lsnToInstantCache = new BoundedConcurrentHashMap<>(100);
     realDatabaseName = retrieveRealDatabaseName();
     boolean supportsAtTimeZone = supportsAtTimeZone();
@@ -172,7 +176,8 @@ public class SqlServerConnection extends JdbcConnection {
    * @param consumer - the change processor
    * @throws SQLException
    */
-  public void getChangesForTable(TableId tableId, Lsn fromLsn, Lsn toLsn, ResultSetConsumer consumer) throws SQLException {
+  public void getChangesForTable(TableId tableId, Lsn fromLsn, Lsn toLsn,
+                                 ResultSetConsumer consumer) throws SQLException {
     final String query = GET_ALL_CHANGES_FOR_TABLE.replace(STATEMENTS_PLACEHOLDER, cdcNameForTable(tableId));
     prepareQuery(query, statement -> {
       statement.setBytes(1, fromLsn.getBinary());
@@ -189,7 +194,8 @@ public class SqlServerConnection extends JdbcConnection {
    * @param consumer - the change processor
    * @throws SQLException
    */
-  public void getChangesForTables(SqlServerChangeTable[] changeTables, Lsn intervalFromLsn, Lsn intervalToLsn, BlockingMultiResultSetConsumer consumer)
+  public void getChangesForTables(SqlServerChangeTable[] changeTables, Lsn intervalFromLsn, Lsn intervalToLsn,
+                                  BlockingMultiResultSetConsumer consumer)
     throws SQLException, InterruptedException {
     final String[] queries = new String[changeTables.length];
     final StatementPreparer[] preparers = new StatementPreparer[changeTables.length];
@@ -216,7 +222,8 @@ public class SqlServerConnection extends JdbcConnection {
   }
 
   private Lsn getFromLsn(SqlServerChangeTable changeTable, Lsn intervalFromLsn) throws SQLException {
-    Lsn fromLsn = changeTable.getStartLsn().compareTo(intervalFromLsn) > 0 ? changeTable.getStartLsn() : intervalFromLsn;
+    Lsn fromLsn = changeTable.getStartLsn().compareTo(intervalFromLsn) > 0 ? changeTable.getStartLsn() :
+      intervalFromLsn;
     return fromLsn.getBinary() != null ? fromLsn : getMinLsn(changeTable.getCaptureInstance());
   }
 
@@ -303,6 +310,9 @@ public class SqlServerConnection extends JdbcConnection {
     return tableId.schema() + '_' + tableId.table();
   }
 
+  /**
+   *
+   */
   public static class CdcEnabledTable {
     private final String tableId;
     private final String captureName;
@@ -408,7 +418,8 @@ public class SqlServerConnection extends JdbcConnection {
     }
 
     // The first 5 columns and the last column of the change table are CDC metadata
-    final List<Column> columns = columnEditors.subList(CHANGE_TABLE_DATA_COLUMN_OFFSET, columnEditors.size() - 1).stream()
+    final List<Column> columns = columnEditors.subList(CHANGE_TABLE_DATA_COLUMN_OFFSET,
+                                                       columnEditors.size() - 1).stream()
       .map(c -> c.position(c.position() - CHANGE_TABLE_DATA_COLUMN_OFFSET).create())
       .collect(Collectors.toList());
 
@@ -439,13 +450,14 @@ public class SqlServerConnection extends JdbcConnection {
 
     if (supportsAtTimeZone) {
       if (serverTimezoneConfig != null) {
-        LOGGER.warn("The '{}' option should not be specified with SQL Server 2016 and newer", SERVER_TIMEZONE_PROP_NAME);
+        LOGGER.warn("The '{}' option should not be specified with SQL Server 2016 and newer",
+                    SERVER_TIMEZONE_PROP_NAME);
       }
-    }
-    else {
+    } else {
       if (serverTimezoneConfig == null) {
         LOGGER.warn(
-          "The '{}' option should be specified to avoid incorrect timestamp values in case of different timezones between the database server and this connector's JVM.",
+          "The '{}' option should be specified to avoid incorrect timestamp values in case of different " +
+            "timezones between the database server and this connector's JVM.",
           SERVER_TIMEZONE_PROP_NAME);
       }
     }
@@ -461,8 +473,7 @@ public class SqlServerConnection extends JdbcConnection {
       return queryAndMap(
         GET_DATABASE_NAME,
         singleResultMapper(rs -> rs.getString(1), "Could not retrieve database name"));
-    }
-    catch (SQLException e) {
+    } catch (SQLException e) {
       throw new RuntimeException("Couldn't obtain database name", e);
     }
   }
@@ -474,8 +485,7 @@ public class SqlServerConnection extends JdbcConnection {
     try {
       // Always expect the support if database is not standalone SQL Server, e.g. Azure
       return getSqlServerVersion().orElse(Integer.MAX_VALUE) > 2016;
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       LOGGER.error("Couldn't obtain database server version; assuming 'AT TIME ZONE' is not supported.", e);
       return false;
     }
@@ -492,8 +502,7 @@ public class SqlServerConnection extends JdbcConnection {
         return Optional.empty();
       }
       return Optional.of(Integer.valueOf(version.substring(21, 25)));
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       throw new RuntimeException("Couldn't obtain database server version", e);
     }
   }
