@@ -5,6 +5,29 @@
  */
 package io.debezium.connector.mysql;
 
+import com.github.shyiko.mysql.binlog.event.deserialization.AbstractRowsEventDataDeserializer;
+import com.github.shyiko.mysql.binlog.event.deserialization.json.JsonBinary;
+import io.debezium.DebeziumException;
+import io.debezium.annotation.Immutable;
+import io.debezium.config.CommonConnectorConfig.BinaryHandlingMode;
+import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
+import io.debezium.data.Json;
+import io.debezium.jdbc.JdbcValueConverters;
+import io.debezium.jdbc.TemporalPrecisionMode;
+import io.debezium.relational.Column;
+import io.debezium.relational.Table;
+import io.debezium.relational.ValueConverter;
+import io.debezium.time.Year;
+import io.debezium.util.Strings;
+import org.apache.kafka.connect.data.Decimal;
+import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.SourceRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -27,41 +50,17 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.kafka.connect.data.Decimal;
-import org.apache.kafka.connect.data.Field;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaBuilder;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.source.SourceRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.github.shyiko.mysql.binlog.event.deserialization.AbstractRowsEventDataDeserializer;
-import com.github.shyiko.mysql.binlog.event.deserialization.json.JsonBinary;
-
-import io.debezium.DebeziumException;
-import io.debezium.annotation.Immutable;
-import io.debezium.config.CommonConnectorConfig.BinaryHandlingMode;
-import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
-import io.debezium.data.Json;
-import io.debezium.jdbc.JdbcValueConverters;
-import io.debezium.jdbc.TemporalPrecisionMode;
-import io.debezium.relational.Column;
-import io.debezium.relational.Table;
-import io.debezium.relational.ValueConverter;
-import io.debezium.time.Year;
-import io.debezium.util.Strings;
-
 /**
  * MySQL-specific customization of the conversions from JDBC values obtained from the MySQL binlog client library.
  * <p>
- * This class always uses UTC for the default time zone when converting values without timezone information to values that require
- * timezones. This is because MySQL {@code TIMESTAMP} values are always
- * <a href="https://dev.mysql.com/doc/refman/5.7/en/datetime.html">stored in UTC</a> (unlike {@code DATETIME} values) and
- * are replicated in this form. Meanwhile, the MySQL Binlog Client library will {@link AbstractRowsEventDataDeserializer
- * deserialize} these as {@link java.sql.Timestamp} values that have no timezone and, therefore, are presumed to be in UTC.
- * When the column is properly marked with a {@link Types#TIMESTAMP_WITH_TIMEZONE} type, the converters will need to convert
- * that {@link java.sql.Timestamp} value into an {@link OffsetDateTime} using the default time zone, which always is UTC.
+ * This class always uses UTC for the default time zone when converting values without timezone information to values
+ * that require timezones. This is because MySQL {@code TIMESTAMP} values are always
+ * <a href="https://dev.mysql.com/doc/refman/5.7/en/datetime.html">stored in UTC</a> (unlike {@code DATETIME} values)
+ * and are replicated in this form. Meanwhile, the MySQL Binlog Client library will
+ * {@link AbstractRowsEventDataDeserializer deserialize} these as {@link java.sql.Timestamp} values that have no
+ * timezone and, therefore, are presumed to be in UTC. When the column is properly marked with a
+ * {@link Types#TIMESTAMP_WITH_TIMEZONE} type, the converters will need to convert that {@link java.sql.Timestamp}
+ * value into an {@link OffsetDateTime} using the default time zone, which always is UTC.
  *
  * @author Randall Hauch
  * @see com.github.shyiko.mysql.binlog.event.deserialization.AbstractRowsEventDataDeserializer
@@ -69,8 +68,11 @@ import io.debezium.util.Strings;
 @Immutable
 public class MySqlValueConverters extends JdbcValueConverters {
 
+  /**
+   *
+   */
   @FunctionalInterface
-  public static interface ParsingErrorHandler {
+  public interface ParsingErrorHandler {
     void error(String message, Exception exception);
   }
 
@@ -100,8 +102,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
   public static ClassLoader jdbcClassLoader;
 
   /**
-   * A utility method that adjusts <a href="https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html">ambiguous</a> 2-digit
-   * year values of DATETIME, DATE, and TIMESTAMP types using these MySQL-specific rules:
+   * A utility method that adjusts <a href="https://dev.mysql.com/doc/refman/5.7/en/two-digit-years.html">ambiguous</a>
+   * 2-digit year values of DATETIME, DATE, and TIMESTAMP types using these MySQL-specific rules:
    * <ul>
    * <li>Year values in the range 00-69 are converted to 2000-2069.</li>
    * <li>Year values in the range 70-99 are converted to 1970-1999.</li>
@@ -115,8 +117,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
       int year = temporal.get(ChronoField.YEAR);
       if (0 <= year && year <= 69) {
         temporal = temporal.plus(2000, ChronoUnit.YEARS);
-      }
-      else if (70 <= year && year <= 99) {
+      } else if (70 <= year && year <= 99) {
         temporal = temporal.plus(1900, ChronoUnit.YEARS);
       }
     }
@@ -126,8 +127,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
   private final ParsingErrorHandler parsingErrorHandler;
 
   /**
-   * Create a new instance that always uses UTC for the default time zone when_needed converting values without timezone information
-   * to values that require timezones.
+   * Create a new instance that always uses UTC for the default time zone when_needed converting values without
+   * timezone information to values that require timezones.
    * <p>
    *
    * @param decimalMode how {@code DECIMAL} and {@code NUMERIC} values should be treated; may be null if
@@ -137,16 +138,16 @@ public class MySqlValueConverters extends JdbcValueConverters {
    *            {@link io.debezium.jdbc.JdbcValueConverters.BigIntUnsignedMode#PRECISE} is to be used
    * @param binaryMode how binary columns should be represented
    */
-  public MySqlValueConverters(DecimalMode decimalMode, TemporalPrecisionMode temporalPrecisionMode, BigIntUnsignedMode bigIntUnsignedMode,
-                              BinaryHandlingMode binaryMode) {
+  public MySqlValueConverters(DecimalMode decimalMode, TemporalPrecisionMode temporalPrecisionMode,
+                              BigIntUnsignedMode bigIntUnsignedMode, BinaryHandlingMode binaryMode) {
     this(decimalMode, temporalPrecisionMode, bigIntUnsignedMode, binaryMode, x -> x, (message, exception) -> {
       throw new DebeziumException(message, exception);
     });
   }
 
   /**
-   * Create a new instance that always uses UTC for the default time zone when converting values without timezone information
-   * to values that require timezones.
+   * Create a new instance that always uses UTC for the default time zone when converting values without timezone
+   * information to values that require timezones.
    * <p>
    *
    * @param decimalMode how {@code DECIMAL} and {@code NUMERIC} values should be treated; may be null if
@@ -156,7 +157,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
    *            {@link io.debezium.jdbc.JdbcValueConverters.BigIntUnsignedMode#PRECISE} is to be used
    * @param binaryMode how binary columns should be represented
    * @param adjuster a temporal adjuster to make a database specific time modification before conversion
-   * @param handler for errors during postponed binlog parsing
+   * @param parsingErrorHandler for errors during postponed binlog parsing
    */
   public MySqlValueConverters(DecimalMode decimalMode, TemporalPrecisionMode temporalPrecisionMode,
                               BigIntUnsignedMode bigIntUnsignedMode, BinaryHandlingMode binaryMode,
@@ -202,7 +203,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
     }
     if (matches(typeName, "SMALLINT UNSIGNED") || matches(typeName, "SMALLINT UNSIGNED ZEROFILL")
       || matches(typeName, "INT2 UNSIGNED") || matches(typeName, "INT2 UNSIGNED ZEROFILL")) {
-      // In order to capture unsigned SMALLINT 16-bit data source, INT32 will be required to safely capture all valid values
+      // In order to capture unsigned SMALLINT 16-bit data source, INT32 will be required to safely capture all valid
+      // values
       // Source: https://kafka.apache.org/0102/javadoc/org/apache/kafka/connect/data/Schema.Type.html
       return SchemaBuilder.int32();
     }
@@ -218,7 +220,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
         case LONG:
           return SchemaBuilder.int64();
         case PRECISE:
-          // In order to capture unsigned INT 64-bit data source, org.apache.kafka.connect.data.Decimal:Byte will be required to safely capture all valid values with scale of 0
+          // In order to capture unsigned INT 64-bit data source, org.apache.kafka.connect.data.Decimal:Byte will be
+          // required to safely capture all valid values with scale of 0
           // Source: https://kafka.apache.org/0102/javadoc/org/apache/kafka/connect/data/Schema.Type.html
           return Decimal.builder(0);
       }
@@ -315,8 +318,11 @@ public class MySqlValueConverters extends JdbcValueConverters {
         if (adaptiveTimeMicrosecondsPrecisionMode) {
           return data -> convertDurationToMicroseconds(column, fieldDefn, data);
         }
+        return ((ValueConverter) (data -> convertTimestampToLocalDateTime(column, fieldDefn, data)))
+          .and(super.converter(column, fieldDefn));
       case Types.TIMESTAMP:
-        return ((ValueConverter) (data -> convertTimestampToLocalDateTime(column, fieldDefn, data))).and(super.converter(column, fieldDefn));
+        return ((ValueConverter) (data -> convertTimestampToLocalDateTime(column, fieldDefn, data)))
+          .and(super.converter(column, fieldDefn));
       default:
         break;
     }
@@ -354,14 +360,14 @@ public class MySqlValueConverters extends JdbcValueConverters {
     // end change from original file
 
     if (encoding == null) {
-      logger.warn("Column uses MySQL character set '{}', which has no mapping to a Java character set", mySqlCharsetName);
-    }
-    else {
+      logger.warn("Column uses MySQL character set '{}', which has no mapping to a Java character set",
+                  mySqlCharsetName);
+    } else {
       try {
         return Charset.forName(encoding);
-      }
-      catch (IllegalCharsetNameException e) {
-        logger.error("Unable to load Java charset '{}' for column with MySQL character set '{}'", encoding, mySqlCharsetName);
+      } catch (IllegalCharsetNameException e) {
+        logger.error("Unable to load Java charset '{}' for column with MySQL character set '{}'", encoding,
+                     mySqlCharsetName);
       }
     }
     return null;
@@ -384,18 +390,16 @@ public class MySqlValueConverters extends JdbcValueConverters {
 
         if (((byte[]) data).length == 0) {
           r.deliver(column.isOptional() ? null : "{}");
-        }
-        else {
+        } else {
           try {
             r.deliver(JsonBinary.parseAsString((byte[]) data));
-          }
-          catch (IOException e) {
-            parsingErrorHandler.error("Failed to parse and read a JSON value on '" + column + "' value " + Arrays.toString((byte[]) data), e);
+          } catch (IOException e) {
+            parsingErrorHandler.error("Failed to parse and read a JSON value on '" + column + "' value " +
+                                        Arrays.toString((byte[]) data), e);
             r.deliver(column.isOptional() ? null : "{}");
           }
         }
-      }
-      else if (data instanceof String) {
+      } else if (data instanceof String) {
         // The SnapshotReader sees JSON values as UTF-8 encoded strings.
         r.deliver(data);
       }
@@ -417,8 +421,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
       if (data instanceof byte[]) {
         // Decode the binary representation using the given character encoding ...
         r.deliver(new String((byte[]) data, columnCharset));
-      }
-      else if (data instanceof String) {
+      } else if (data instanceof String) {
         r.deliver(data);
       }
     });
@@ -441,13 +444,11 @@ public class MySqlValueConverters extends JdbcValueConverters {
       if (data instanceof java.time.Year) {
         // The MySQL binlog always returns a Year object ...
         r.deliver(adjustTemporal(java.time.Year.of(((java.time.Year) data).getValue())).get(ChronoField.YEAR));
-      }
-      else if (data instanceof java.sql.Date) {
+      } else if (data instanceof java.sql.Date) {
         // MySQL JDBC driver sometimes returns a Java SQL Date object ...
         // year from java.sql.Date is defined as number of years since 1900
         r.deliver(((java.sql.Date) data).getYear() + 1900);
-      }
-      else if (data instanceof String) {
+      } else if (data instanceof String) {
         mutData = Integer.valueOf((String) data);
       }
       if (mutData instanceof Number) {
@@ -458,8 +459,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
   }
 
   /**
-   * Converts a value object for a MySQL {@code ENUM}, which is represented in the binlog events as an integer value containing
-   * the index of the enum option. The MySQL JDBC driver returns a string containing the option,
+   * Converts a value object for a MySQL {@code ENUM}, which is represented in the binlog events as an integer value
+   * containing the index of the enum option. The MySQL JDBC driver returns a string containing the option,
    * so this method calculates the same.
    *
    * @param options the characters that appear in the same order as defined in the column; may not be null
@@ -474,8 +475,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
       if (data instanceof String) {
         // JDBC should return strings ...
         r.deliver(data);
-      }
-      else if (data instanceof Integer) {
+      } else if (data instanceof Integer) {
         if (options != null) {
           // The binlog will contain an int with the 1-based index of the option in the enum value ...
           int value = ((Integer) data).intValue();
@@ -487,8 +487,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
           if (index < options.size() && index >= 0) {
             r.deliver(options.get(index));
           }
-        }
-        else {
+        } else {
           r.deliver(null);
         }
       }
@@ -496,9 +495,9 @@ public class MySqlValueConverters extends JdbcValueConverters {
   }
 
   /**
-   * Converts a value object for a MySQL {@code SET}, which is represented in the binlog events contain a long number in which
-   * every bit corresponds to a different option. The MySQL JDBC driver returns a string containing the comma-separated options,
-   * so this method calculates the same.
+   * Converts a value object for a MySQL {@code SET}, which is represented in the binlog events contain a long number
+   * in which every bit corresponds to a different option. The MySQL JDBC driver returns a string containing the
+   * comma-separated options, so this method calculates the same.
    *
    * @param options the characters that appear in the same order as defined in the column; may not be null
    * @param column the column definition describing the {@code data} value; never null
@@ -512,8 +511,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
       if (data instanceof String) {
         // JDBC should return strings ...
         r.deliver(data);
-      }
-      else if (data instanceof Long) {
+      } else if (data instanceof Long) {
         // The binlog will contain a long with the indexes of the options in the set value ...
         long indexes = ((Long) data).longValue();
         r.deliver(convertSetValue(column, indexes, options));
@@ -523,7 +521,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
 
   /**
    * Determine if the uppercase form of a column's type exactly matches or begins with the specified prefix.
-   * Note that this logic works when the column's {@link Column#typeName() type} contains the type name followed by parentheses.
+   * Note that this logic works when the column's {@link Column#typeName() type} contains the type name followed by
+   * parentheses.
    *
    * @param upperCaseTypeName the upper case form of the column's {@link Column#typeName() type name}
    * @param upperCaseMatch the upper case form of the expected type or prefix of the type; may not be null
@@ -537,7 +536,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
   }
 
   /**
-   * Determine if the uppercase form of a column's type is geometry collection independent of JDBC driver or server version.
+   * Determine if the uppercase form of a column's type is geometry collection independent of JDBC driver or server
+   * version.
    *
    * @param upperCaseTypeName the upper case form of the column's {@link Column#typeName() type name}
    * @return {@code true} if the type is geometry collection
@@ -568,14 +568,12 @@ public class MySqlValueConverters extends JdbcValueConverters {
       if (indexes % 2L != 0) {
         if (first) {
           first = false;
-        }
-        else {
+        } else {
           sb.append(',');
         }
         if (index < optionLen) {
           sb.append(options.get(index));
-        }
-        else {
+        } else {
           logger.warn("Found unexpected index '{}' on column {}", index, column);
         }
       }
@@ -597,15 +595,17 @@ public class MySqlValueConverters extends JdbcValueConverters {
    */
   protected Object convertPoint(Column column, Field fieldDefn, Object data) {
     final MySqlGeometry empty = MySqlGeometry.createEmpty();
-    return convertValue(column, fieldDefn, data, io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), empty.getWkb(), empty.getSrid()), (r) -> {
+    return convertValue(column, fieldDefn, data,
+                        io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), empty.getWkb(),
+                                                                       empty.getSrid()), (r) -> {
       if (data instanceof byte[]) {
-        // The binlog utility sends a byte array for any Geometry type, we will use our own binaryParse to parse the byte to WKB, hence
-        // to the suitable class
+        // The binlog utility sends a byte array for any Geometry type, we will use our own binaryParse to parse the
+        // byte to WKB, hence to the suitable class
         MySqlGeometry mySqlGeometry = MySqlGeometry.fromBytes((byte[]) data);
         if (mySqlGeometry.isPoint()) {
-          r.deliver(io.debezium.data.geometry.Point.createValue(fieldDefn.schema(), mySqlGeometry.getWkb(), mySqlGeometry.getSrid()));
-        }
-        else {
+          r.deliver(io.debezium.data.geometry.Point.createValue(fieldDefn.schema(), mySqlGeometry.getWkb(),
+                                                                mySqlGeometry.getSrid()));
+        } else {
           throw new ConnectException("Failed to parse and read a value of type POINT on " + column);
         }
       }
@@ -613,7 +613,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
   }
 
   /**
-   * Convert the a value representing a GEOMETRY {@code byte[]} value to a Geometry value used in a {@link SourceRecord}.
+   * Convert the a value representing a GEOMETRY {@code byte[]} value to a Geometry value used in a
+   * {@link SourceRecord}.
    *
    * @param column the column in which the value appears
    * @param fieldDefn the field definition for the {@link SourceRecord}'s {@link Schema}; never null
@@ -623,15 +624,18 @@ public class MySqlValueConverters extends JdbcValueConverters {
    */
   protected Object convertGeometry(Column column, Field fieldDefn, Object data) {
     final MySqlGeometry empty = MySqlGeometry.createEmpty();
-    return convertValue(column, fieldDefn, data, io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), empty.getWkb(), empty.getSrid()), (r) -> {
+    return convertValue(column, fieldDefn, data,
+                        io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), empty.getWkb(),
+                                                                       empty.getSrid()), (r) -> {
       if (data instanceof byte[]) {
-        // The binlog utility sends a byte array for any Geometry type, we will use our own binaryParse to parse the byte to WKB, hence
-        // to the suitable class
+        // The binlog utility sends a byte array for any Geometry type, we will use our own binaryParse to parse the
+        // byte to WKB, hence to the suitable class
         if (data instanceof byte[]) {
-          // The binlog utility sends a byte array for any Geometry type, we will use our own binaryParse to parse the byte to WKB, hence
-          // to the suitable class
+          // The binlog utility sends a byte array for any Geometry type, we will use our own binaryParse to parse the
+          // byte to WKB, hence to the suitable class
           MySqlGeometry mySqlGeometry = MySqlGeometry.fromBytes((byte[]) data);
-          r.deliver(io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), mySqlGeometry.getWkb(), mySqlGeometry.getSrid()));
+          r.deliver(io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), mySqlGeometry.getWkb(),
+                                                                   mySqlGeometry.getSrid()));
         }
       }
     });
@@ -662,11 +666,9 @@ public class MySqlValueConverters extends JdbcValueConverters {
     return convertValue(column, fieldDefn, data, (short) 0, (r) -> {
       if (data instanceof Short) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedTinyint((short) data));
-      }
-      else if (data instanceof Number) {
+      } else if (data instanceof Number) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedTinyint(((Number) data).shortValue()));
-      }
-      else {
+      } else {
         // We continue with the original converting method (smallint) since we have an unsigned Tinyint
         r.deliver(convertSmallInt(column, fieldDefn, data));
       }
@@ -688,11 +690,9 @@ public class MySqlValueConverters extends JdbcValueConverters {
     return convertValue(column, fieldDefn, data, 0, (r) -> {
       if (data instanceof Integer) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedSmallint((int) data));
-      }
-      else if (data instanceof Number) {
+      } else if (data instanceof Number) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedSmallint(((Number) data).intValue()));
-      }
-      else {
+      } else {
         // We continue with the original converting method (integer) since we have an unsigned Smallint
         r.deliver(convertInteger(column, fieldDefn, data));
       }
@@ -714,11 +714,9 @@ public class MySqlValueConverters extends JdbcValueConverters {
     return convertValue(column, fieldDefn, data, 0, (r) -> {
       if (data instanceof Integer) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedMediumint((int) data));
-      }
-      else if (data instanceof Number) {
+      } else if (data instanceof Number) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedMediumint(((Number) data).intValue()));
-      }
-      else {
+      } else {
         // We continue with the original converting method (integer) since we have an unsigned Medium
         r.deliver(convertInteger(column, fieldDefn, data));
       }
@@ -740,11 +738,9 @@ public class MySqlValueConverters extends JdbcValueConverters {
     return convertValue(column, fieldDefn, data, 0L, (r) -> {
       if (data instanceof Long) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedInteger((long) data));
-      }
-      else if (data instanceof Number) {
+      } else if (data instanceof Number) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedInteger(((Number) data).longValue()));
-      }
-      else {
+      } else {
         // We continue with the original converting method (bigint) since we have an unsigned Integer
         r.deliver(convertBigInt(column, fieldDefn, data));
       }
@@ -766,14 +762,11 @@ public class MySqlValueConverters extends JdbcValueConverters {
     return convertValue(column, fieldDefn, data, 0L, (r) -> {
       if (data instanceof BigDecimal) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedBigint((BigDecimal) data));
-      }
-      else if (data instanceof Number) {
+      } else if (data instanceof Number) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedBigint(new BigDecimal(((Number) data).toString())));
-      }
-      else if (data instanceof String) {
+      } else if (data instanceof String) {
         r.deliver(MySqlUnsignedIntegerConverter.convertUnsignedBigint(new BigDecimal((String) data)));
-      }
-      else {
+      } else {
         r.deliver(convertNumeric(column, fieldDefn, data));
       }
     });
@@ -800,8 +793,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
         if (data instanceof Duration) {
           r.deliver(((Duration) data).toNanos() / 1_000);
         }
-      }
-      catch (IllegalArgumentException e) {
+      } catch (IllegalArgumentException e) {
       }
     });
   }
@@ -837,8 +829,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
         .plusMinutes(minutes)
         .plusSeconds(seconds)
         .plusNanos(nanoSeconds);
-    }
-    else {
+    } else {
       return Duration.ofHours(hours)
         .minusMinutes(minutes)
         .minusSeconds(seconds)
@@ -857,7 +848,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
     final int day = Integer.parseInt(matcher.group(3));
 
     if (year == 0 || month == 0 || day == 0) {
-      LOGGER.warn("Invalid value '{}' stored in column '{}' of table '{}' converted to empty value", dateString, column.name(), table.id());
+      LOGGER.warn("Invalid value '{}' stored in column '{}' of table '{}' converted to empty value", dateString,
+                  column.name(), table.id());
       return null;
     }
     return LocalDate.of(year, month, day);
@@ -874,7 +866,8 @@ public class MySqlValueConverters extends JdbcValueConverters {
     final int day = Integer.parseInt(matcher.group(3));
 
     if (year == 0 || month == 0 || day == 0) {
-      LOGGER.warn("Invalid value '{}' stored in column '{}' of table '{}' converted to empty value", timestampString, column.name(), table.id());
+      LOGGER.warn("Invalid value '{}' stored in column '{}' of table '{}' converted to empty value", timestampString,
+                  column.name(), table.id());
       return true;
     }
     return false;
