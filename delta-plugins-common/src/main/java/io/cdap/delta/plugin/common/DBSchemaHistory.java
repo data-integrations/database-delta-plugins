@@ -78,6 +78,11 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
     }
   }
 
+  @Override
+  public boolean storageExists() {
+    return true;
+  }
+
   // TODO: cache history, should only have to read once
   private List<HistoryRecord> getHistory() {
     List<HistoryRecord> history = new ArrayList<>();
