@@ -129,7 +129,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     DDLEvent.Builder builder = DDLEvent.builder()
-                                 .setDatabase(databaseName)
+                                 .setDatabaseName(databaseName)
                                  .setSnapshot(isSnapshot);
 
     Schema schema = value.getSchema();
@@ -149,14 +149,14 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       try {
         // try to always drop the table before snapshot the schema.
         emitter.emit(builder.setOperation(DDLOperation.Type.DROP_TABLE)
-                       .setTable(tableName)
+                       .setTableName(tableName)
                        .build());
 
         // try to emit create database event before create table event
         emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_DATABASE).build());
 
         emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_TABLE)
-                       .setTable(tableName)
+                       .setTableName(tableName)
                        .setSchema(schema)
                        .setPrimaryKey(primaryFields)
                        .build());
@@ -176,8 +176,8 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     DMLEvent.Builder dmlBuilder = DMLEvent.builder()
       .setOffset(recordOffset)
       .setOperationType(op)
-      .setDatabase(databaseName)
-      .setTable(tableName)
+      .setDatabaseName(databaseName)
+      .setTableName(tableName)
       .setRow(value)
       .setSnapshot(isSnapshot)
       .setTransactionId(null)

@@ -154,27 +154,27 @@ public class MySqlEventReaderIntegrationTest {
 
     DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
     Assert.assertEquals(DDLOperation.Type.DROP_TABLE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
+    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
 
     ddlEvent = eventEmitter.getDdlEvents().get(1);
     Assert.assertEquals(DDLOperation.Type.DROP_DATABASE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
+    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
 
     ddlEvent = eventEmitter.getDdlEvents().get(2);
     Assert.assertEquals(DDLOperation.Type.CREATE_DATABASE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
+    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
 
     ddlEvent = eventEmitter.getDdlEvents().get(3);
     Assert.assertEquals(DDLOperation.Type.CREATE_TABLE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getDatabase());
+    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
     Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
     Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
     Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
 
     DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
     Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
-    Assert.assertEquals(DB, dmlEvent.getDatabase());
+    Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
     Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
     StructuredRecord row = dmlEvent.getRow();
     StructuredRecord expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
@@ -186,7 +186,7 @@ public class MySqlEventReaderIntegrationTest {
 
     dmlEvent = eventEmitter.getDmlEvents().get(1);
     Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
-    Assert.assertEquals(DB, dmlEvent.getDatabase());
+    Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
     Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
     row = dmlEvent.getRow();
     expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
@@ -198,7 +198,7 @@ public class MySqlEventReaderIntegrationTest {
 
     dmlEvent = eventEmitter.getDmlEvents().get(2);
     Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
-    Assert.assertEquals(DB, dmlEvent.getDatabase());
+    Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
     Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
     row = dmlEvent.getRow();
     expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)

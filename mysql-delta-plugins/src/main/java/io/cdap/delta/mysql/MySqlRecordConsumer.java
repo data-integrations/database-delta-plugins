@@ -200,8 +200,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     DMLEvent.Builder builder = DMLEvent.builder()
       .setOffset(recordOffset)
       .setOperationType(op)
-      .setDatabase(databaseName)
-      .setTable(tableName)
+      .setDatabaseName(databaseName)
+      .setTableName(tableName)
       .setTransactionId(transactionId)
       .setIngestTimestamp(ingestTime)
       .setSnapshot(isSnapshot);
@@ -221,14 +221,14 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     ddlParser.getDdlChanges().reset();
     ddlParser.parse(ddlStatement, tables);
     AtomicReference<InterruptedException> interrupted = new AtomicReference<>();
-    ddlParser.getDdlChanges().groupEventsByDatabase((database, events) -> {
+    ddlParser.getDdlChanges().groupEventsByDatabase((databaseName, events) -> {
       if (interrupted.get() != null) {
         return;
       }
       for (DdlParserListener.Event event : events) {
         DDLEvent.Builder builder = DDLEvent.builder()
           .setOffset(recordOffset)
-          .setDatabase(database)
+          .setDatabaseName(databaseName)
           .setSnapshot(isSnapshot);
         DDLEvent ddlEvent = null;
         // since current ddl blacklist implementation is bind with table level, we will only do the ddl blacklist
@@ -239,18 +239,18 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             DdlParserListener.TableAlteredEvent alteredEvent = (DdlParserListener.TableAlteredEvent) event;
             TableId tableId = alteredEvent.tableId();
             Table table = tables.forTable(tableId);
-            SourceTable sourceTable = getSourceTable(database, tableId.table());
+            SourceTable sourceTable = getSourceTable(databaseName, tableId.table());
             DDLOperation.Type ddlOp;
             if (alteredEvent.previousTableId() != null) {
               ddlOp = DDLOperation.Type.RENAME_TABLE;
-              builder.setPrevTable(alteredEvent.previousTableId().table());
+              builder.setPrevTableName(alteredEvent.previousTableId().table());
             } else {
               ddlOp = DDLOperation.Type.ALTER_TABLE;
             }
 
             if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, ddlOp)) {
               ddlEvent = builder.setOperation(ddlOp)
-                .setTable(tableId.table())
+                .setTableName(tableId.table())
                 .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
                              Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
                 .setPrimaryKey(table.primaryKeyColumnNames())
@@ -259,10 +259,10 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             break;
           case DROP_TABLE:
             DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
-            sourceTable = getSourceTable(database, droppedEvent.tableId().table());
+            sourceTable = getSourceTable(databaseName, droppedEvent.tableId().table());
             if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.DROP_TABLE)) {
               ddlEvent = builder.setOperation(DDLOperation.Type.DROP_TABLE)
-                .setTable(droppedEvent.tableId().table())
+                .setTableName(droppedEvent.tableId().table())
                 .build();
             }
             break;
@@ -270,10 +270,10 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             DdlParserListener.TableCreatedEvent createdEvent = (DdlParserListener.TableCreatedEvent) event;
             tableId = createdEvent.tableId();
             table = tables.forTable(tableId);
-            sourceTable = getSourceTable(database, tableId.table());
+            sourceTable = getSourceTable(databaseName, tableId.table());
             if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.CREATE_TABLE)) {
               ddlEvent = builder.setOperation(DDLOperation.Type.CREATE_TABLE)
-                .setTable(tableId.table())
+                .setTableName(tableId.table())
                 .setSchema(readAllTables ? Records.getSchema(table, mySqlValueConverters) :
                              Records.getSchema(table, mySqlValueConverters, sourceTable.getColumns()))
                 .setPrimaryKey(table.primaryKeyColumnNames())
@@ -296,10 +296,10 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
           case TRUNCATE_TABLE:
             DdlParserListener.TableTruncatedEvent truncatedEvent =
               (DdlParserListener.TableTruncatedEvent) event;
-            sourceTable = getSourceTable(database, truncatedEvent.tableId().table());
+            sourceTable = getSourceTable(databaseName, truncatedEvent.tableId().table());
             if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.TRUNCATE_TABLE)) {
               ddlEvent = builder.setOperation(DDLOperation.Type.TRUNCATE_TABLE)
-                .setTable(truncatedEvent.tableId().table())
+                .setTableName(truncatedEvent.tableId().table())
                 .build();
             }
             break;
