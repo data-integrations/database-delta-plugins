@@ -59,9 +59,10 @@
   </scm>
 
   <properties>
-    <debezium.version>0.9.5.Final</debezium.version>
     <delta.version>0.3.0-SNAPSHOT</delta.version>
+    <debezium.version>1.3.1.Final</debezium.version>
     <slf4j.version>1.7.25</slf4j.version>
+    <guava.version>30.0-jre</guava.version>
   </properties>
 
   <repositories>
@@ -124,6 +125,11 @@
       <groupId>io.cdap.delta</groupId>
       <artifactId>delta-api</artifactId>
       <version>${delta.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>${guava.version}</version>
     </dependency>
   </dependencies>
 

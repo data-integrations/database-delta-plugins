@@ -6,13 +6,16 @@
 
 package io.debezium.connector.sqlserver;
 
+import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.Configuration;
+import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.Column;
 import io.debezium.relational.ColumnEditor;
 import io.debezium.relational.Table;
 import io.debezium.relational.TableId;
 import io.debezium.util.BoundedConcurrentHashMap;
+import io.debezium.util.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,56 +24,124 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
  * {@link JdbcConnection} extension to be used with Microsoft SQL Server
+ *
+ * @author Horia Chiorean (hchiorea@redhat.com), Jiri Pechanec
+ *
  */
 public class SqlServerConnection extends JdbcConnection {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerConnection.class);
+
+  public static final String SERVER_TIMEZONE_PROP_NAME = "server.timezone";
+  public static final String INSTANCE_NAME = "instance";
 
   private static final String GET_DATABASE_NAME = "SELECT db_name()";
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerConnection.class);
+
   private static final String STATEMENTS_PLACEHOLDER = "#";
   private static final String GET_MAX_LSN = "SELECT sys.fn_cdc_get_max_lsn()";
+  private static final String GET_MIN_LSN = "SELECT sys.fn_cdc_get_min_lsn('#')";
   private static final String LOCK_TABLE = "SELECT * FROM [#] WITH (TABLOCKX)";
-  private static final String LSN_TO_TIMESTAMP = "SELECT sys.fn_cdc_map_lsn_to_time(?)";
+  private static final String SQL_SERVER_VERSION = "SELECT @@VERSION AS 'SQL Server Version'";
+  private final String lsnToTimestamp;
   private static final String INCREMENT_LSN = "SELECT sys.fn_cdc_increment_lsn(?)";
-  private static final String GET_ALL_CHANGES_FOR_TABLE =
-    "SELECT * FROM cdc.[fn_cdc_get_all_changes_#](ISNULL(?,sys.fn_cdc_get_min_lsn('#')), ?, N'all update old')";
+  private static final String GET_ALL_CHANGES_FOR_TABLE
+    = "SELECT * FROM cdc.[fn_cdc_get_all_changes_#](?, ?, N'all update old')";
   private static final String GET_LIST_OF_CDC_ENABLED_TABLES = "EXEC sys.sp_cdc_help_change_data_capture";
-  private static final String GET_LIST_OF_NEW_CDC_ENABLED_TABLES =
-    "SELECT * FROM cdc.change_tables WHERE start_lsn BETWEEN ? AND ?";
+  private static final String GET_LIST_OF_NEW_CDC_ENABLED_TABLES
+    = "SELECT * FROM cdc.change_tables WHERE start_lsn BETWEEN ? AND ?";
   private static final String GET_LIST_OF_KEY_COLUMNS = "SELECT * FROM cdc.index_columns WHERE object_id=?";
+  private static final Pattern BRACKET_PATTERN = Pattern.compile("[\\[\\]]");
+
   private static final int CHANGE_TABLE_DATA_COLUMN_OFFSET = 5;
 
-  // Note: this line is the only change from the original file
+  private static final String URL_PATTERN = "jdbc:sqlserver://${" + JdbcConfiguration.HOSTNAME + "}:${"
+    + JdbcConfiguration.PORT + "};databaseName=${"
+    + JdbcConfiguration.DATABASE + "}";
+
+  // Note: this line is the only change from the original file. Renamed variable to factory and
+  // made it public and non-final
   public static ConnectionFactory factory;
 
   /**
    * actual name of the database, which could differ in casing from the database name given in the connector config.
    */
   private final String realDatabaseName;
-
-  private interface ResultSetExtractor<T> {
-    T apply(ResultSet rs) throws SQLException;
-  }
+  private final ZoneId transactionTimezone;
+  private final SourceTimestampMode sourceTimestampMode;
+  private final Clock clock;
+  private final int queryFetchSize;
 
   private final BoundedConcurrentHashMap<Lsn, Instant> lsnToInstantCache;
+  private final SqlServerDefaultValueConverter defaultValueConverter;
 
   /**
    * Creates a new connection using the supplied configuration.
    *
    * @param config {@link Configuration} instance, may not be null.
+   * @param clock the clock
+   * @param sourceTimestampMode strategy for populating {@code source.ts_ms}.
+   * @param valueConverters {@link SqlServerValueConverters} instance
    */
-  public SqlServerConnection(Configuration config) {
-    super(config, factory);
+  public SqlServerConnection(Configuration config, Clock clock, SourceTimestampMode sourceTimestampMode,
+                             SqlServerValueConverters valueConverters) {
+    this(config, clock, sourceTimestampMode, valueConverters, null);
+  }
+
+  /**
+   * Creates a new connection using the supplied configuration.
+   *
+   * @param config {@link Configuration} instance, may not be null.
+   * @param clock the clock
+   * @param sourceTimestampMode strategy for populating {@code source.ts_ms}.
+   * @param valueConverters {@link SqlServerValueConverters} instance
+   * @param classLoaderSupplier class loader supplier
+   */
+  public SqlServerConnection(Configuration config, Clock clock, SourceTimestampMode sourceTimestampMode,
+                             SqlServerValueConverters valueConverters,
+                             Supplier<ClassLoader> classLoaderSupplier) {
+    super(config, factory, classLoaderSupplier);
     lsnToInstantCache = new BoundedConcurrentHashMap<>(100);
     realDatabaseName = retrieveRealDatabaseName();
+    boolean supportsAtTimeZone = supportsAtTimeZone();
+    transactionTimezone = retrieveTransactionTimezone(supportsAtTimeZone);
+    lsnToTimestamp = getLsnToTimestamp(supportsAtTimeZone);
+    this.clock = clock;
+    this.sourceTimestampMode = sourceTimestampMode;
+    defaultValueConverter = new SqlServerDefaultValueConverter(this::connection, valueConverters);
+    this.queryFetchSize = config().getInteger(CommonConnectorConfig.QUERY_FETCH_SIZE);
+  }
+
+  /**
+   * Returns the query for obtaining the LSN-to-TIMESTAMP query. On SQL Server
+   * 2016 and newer, the query will normalize the value to UTC. This means that
+   * the {@link #SERVER_TIMEZONE_PROP_NAME} is not necessary to be given. The
+   * returned TIMESTAMP will be adjusted by the JDBC driver using this VM's TZ (as
+   * required by the JDBC spec), and that same TZ will be applied when converting
+   * the TIMESTAMP value into an {@code Instant}.
+   */
+  private static String getLsnToTimestamp(boolean supportsAtTimeZone) {
+    String lsnToTimestamp = "SELECT sys.fn_cdc_map_lsn_to_time(?)";
+
+    if (supportsAtTimeZone) {
+      lsnToTimestamp = lsnToTimestamp + " AT TIME ZONE 'UTC'";
+    }
+
+    return lsnToTimestamp;
   }
 
   /**
@@ -85,6 +156,18 @@ public class SqlServerConnection extends JdbcConnection {
   }
 
   /**
+   * @return the smallest log sequence number of table
+   */
+  public Lsn getMinLsn(String changeTableName) throws SQLException {
+    String query = GET_MIN_LSN.replace(STATEMENTS_PLACEHOLDER, changeTableName);
+    return queryAndMap(query, singleResultMapper(rs -> {
+      final Lsn ret = Lsn.valueOf(rs.getBytes(1));
+      LOGGER.trace("Current minimum lsn is {}", ret);
+      return ret;
+    }, "Minimum LSN query must return exactly one value"));
+  }
+
+  /**
    * Provides all changes recorded by the SQL Server CDC capture process for a given table.
    *
    * @param tableId - the requested table changes
@@ -93,8 +176,8 @@ public class SqlServerConnection extends JdbcConnection {
    * @param consumer - the change processor
    * @throws SQLException
    */
-  public void getChangesForTable(TableId tableId, Lsn fromLsn, Lsn toLsn, ResultSetConsumer consumer)
-    throws SQLException {
+  public void getChangesForTable(TableId tableId, Lsn fromLsn, Lsn toLsn,
+                                 ResultSetConsumer consumer) throws SQLException {
     final String query = GET_ALL_CHANGES_FOR_TABLE.replace(STATEMENTS_PLACEHOLDER, cdcNameForTable(tableId));
     prepareQuery(query, statement -> {
       statement.setBytes(1, fromLsn.getBinary());
@@ -111,21 +194,24 @@ public class SqlServerConnection extends JdbcConnection {
    * @param consumer - the change processor
    * @throws SQLException
    */
-  public void getChangesForTables(ChangeTable[] changeTables, Lsn intervalFromLsn, Lsn intervalToLsn,
-                                  BlockingMultiResultSetConsumer consumer) throws SQLException, InterruptedException {
+  public void getChangesForTables(SqlServerChangeTable[] changeTables, Lsn intervalFromLsn, Lsn intervalToLsn,
+                                  BlockingMultiResultSetConsumer consumer)
+    throws SQLException, InterruptedException {
     final String[] queries = new String[changeTables.length];
     final StatementPreparer[] preparers = new StatementPreparer[changeTables.length];
 
     int idx = 0;
-    for (ChangeTable changeTable: changeTables) {
+    for (SqlServerChangeTable changeTable : changeTables) {
       final String query = GET_ALL_CHANGES_FOR_TABLE.replace(STATEMENTS_PLACEHOLDER, changeTable.getCaptureInstance());
       queries[idx] = query;
       // If the table was added in the middle of queried buffer we need
       // to adjust from to the first LSN available
-      final Lsn fromLsn = changeTable.getStartLsn().compareTo(intervalFromLsn) > 0 ?
-        changeTable.getStartLsn() : intervalFromLsn;
+      final Lsn fromLsn = getFromLsn(changeTable, intervalFromLsn);
       LOGGER.trace("Getting changes for table {} in range[{}, {}]", changeTable, fromLsn, intervalToLsn);
       preparers[idx] = statement -> {
+        if (queryFetchSize > 0) {
+          statement.setFetchSize(queryFetchSize);
+        }
         statement.setBytes(1, fromLsn.getBinary());
         statement.setBytes(2, intervalToLsn.getBinary());
       };
@@ -133,6 +219,12 @@ public class SqlServerConnection extends JdbcConnection {
       idx++;
     }
     prepareQuery(queries, preparers, consumer);
+  }
+
+  private Lsn getFromLsn(SqlServerChangeTable changeTable, Lsn intervalFromLsn) throws SQLException {
+    Lsn fromLsn = changeTable.getStartLsn().compareTo(intervalFromLsn) > 0 ? changeTable.getStartLsn() :
+      intervalFromLsn;
+    return fromLsn.getBinary() != null ? fromLsn : getMinLsn(changeTable.getCaptureInstance());
   }
 
   /**
@@ -157,11 +249,15 @@ public class SqlServerConnection extends JdbcConnection {
    * Map a commit LSN to a point in time when the commit happened.
    *
    * @param lsn - LSN of the commit
-   * @return time when the commit was recorded into the database log
+   * @return time when the commit was recorded into the database log or the
+   *         current time, depending on the setting for the "source timestamp
+   *         mode" option
    * @throws SQLException
    */
   public Instant timestampOfLsn(Lsn lsn) throws SQLException {
-    final String query = LSN_TO_TIMESTAMP;
+    if (SourceTimestampMode.PROCESSING.equals(sourceTimestampMode)) {
+      return clock.currentTime();
+    }
 
     if (lsn.getBinary() == null) {
       return null;
@@ -172,17 +268,31 @@ public class SqlServerConnection extends JdbcConnection {
       return cachedInstant;
     }
 
-    return prepareQueryAndMap(query, statement -> {
+    return prepareQueryAndMap(lsnToTimestamp, statement -> {
       statement.setBytes(1, lsn.getBinary());
     }, singleResultMapper(rs -> {
       final Timestamp ts = rs.getTimestamp(1);
-      final Instant ret = (ts == null) ? null : ts.toInstant();
+      Instant ret = (ts == null) ? null : normalize(ts);
       LOGGER.trace("Timestamp of lsn {} is {}", lsn, ret);
       if (ret != null) {
         lsnToInstantCache.put(lsn, ret);
       }
       return ret;
     }, "LSN to timestamp query must return exactly one value"));
+  }
+
+  private Instant normalize(Timestamp timestamp) {
+    Instant instant = timestamp.toInstant();
+
+    // in case the incoming timestamp was not based on UTC, shift it as per the
+    // configured timezone which must match the value used by the database
+    if (!transactionTimezone.getId().equals("UTC")) {
+      instant = instant.atZone(transactionTimezone)
+        .toLocalDateTime()
+        .toInstant(ZoneOffset.UTC);
+    }
+
+    return instant;
   }
 
   /**
@@ -200,20 +310,8 @@ public class SqlServerConnection extends JdbcConnection {
     return tableId.schema() + '_' + tableId.table();
   }
 
-  private <T> ResultSetMapper<T> singleResultMapper(ResultSetExtractor<T> extractor, String error) throws SQLException {
-    return (rs) -> {
-      if (rs.next()) {
-        final T ret = extractor.apply(rs);
-        if (!rs.next()) {
-          return ret;
-        }
-      }
-      throw new IllegalStateException(error);
-    };
-  }
-
   /**
-   * Class for CDC enabled table.
+   *
    */
   public static class CdcEnabledTable {
     private final String tableId;
@@ -229,35 +327,37 @@ public class SqlServerConnection extends JdbcConnection {
     public String getTableId() {
       return tableId;
     }
+
     public String getCaptureName() {
       return captureName;
     }
+
     public Lsn getFromLsn() {
       return fromLsn;
     }
   }
 
-  public Set<ChangeTable> listOfChangeTables() throws SQLException {
+  public Set<SqlServerChangeTable> listOfChangeTables() throws SQLException {
     final String query = GET_LIST_OF_CDC_ENABLED_TABLES;
 
     return queryAndMap(query, rs -> {
-      final Set<ChangeTable> changeTables = new HashSet<>();
+      final Set<SqlServerChangeTable> changeTables = new HashSet<>();
       while (rs.next()) {
         changeTables.add(
-          new ChangeTable(
+          new SqlServerChangeTable(
             new TableId(realDatabaseName, rs.getString(1), rs.getString(2)),
             rs.getString(3),
             rs.getInt(4),
             Lsn.valueOf(rs.getBytes(6)),
-            Lsn.valueOf(rs.getBytes(7))
-          )
-        );
+            Lsn.valueOf(rs.getBytes(7)),
+            Arrays.asList(BRACKET_PATTERN.matcher(Optional.ofNullable(rs.getString(15)).orElse(""))
+                            .replaceAll("").split(", "))));
       }
       return changeTables;
     });
   }
 
-  public Set<ChangeTable> listOfNewChangeTables(Lsn fromLsn, Lsn toLsn) throws SQLException {
+  public Set<SqlServerChangeTable> listOfNewChangeTables(Lsn fromLsn, Lsn toLsn) throws SQLException {
     final String query = GET_LIST_OF_NEW_CDC_ENABLED_TABLES;
 
     return prepareQueryAndMap(query,
@@ -266,21 +366,19 @@ public class SqlServerConnection extends JdbcConnection {
                                 ps.setBytes(2, toLsn.getBinary());
                               },
                               rs -> {
-                                final Set<ChangeTable> changeTables = new HashSet<>();
+                                final Set<SqlServerChangeTable> changeTables = new HashSet<>();
                                 while (rs.next()) {
-                                  changeTables.add(new ChangeTable(
+                                  changeTables.add(new SqlServerChangeTable(
                                     rs.getString(4),
                                     rs.getInt(1),
                                     Lsn.valueOf(rs.getBytes(5)),
-                                    Lsn.valueOf(rs.getBytes(6))
-                                  ));
+                                    Lsn.valueOf(rs.getBytes(6))));
                                 }
                                 return changeTables;
-                              }
-    );
+                              });
   }
 
-  public Table getTableSchemaFromTable(ChangeTable changeTable) throws SQLException {
+  public Table getTableSchemaFromTable(SqlServerChangeTable changeTable) throws SQLException {
     final DatabaseMetaData metadata = connection().getMetaData();
 
     List<Column> columns = new ArrayList<>();
@@ -288,14 +386,18 @@ public class SqlServerConnection extends JdbcConnection {
       realDatabaseName,
       changeTable.getSourceTableId().schema(),
       changeTable.getSourceTableId().table(),
-      null)
-    ) {
+      null)) {
       while (rs.next()) {
-        readTableColumn(rs, changeTable.getSourceTableId(), null).ifPresent(ce -> columns.add(ce.create()));
+        readTableColumn(rs, changeTable.getSourceTableId(), null).ifPresent(ce -> {
+          // Filter out columns not included in the change table.
+          if (changeTable.getCapturedColumns().contains(ce.name())) {
+            columns.add(ce.create());
+          }
+        });
       }
     }
 
-    final List<String> pkColumnNames = readPrimaryKeyNames(metadata, changeTable.getSourceTableId());
+    final List<String> pkColumnNames = readPrimaryKeyOrUniqueIndexNames(metadata, changeTable.getSourceTableId());
     Collections.sort(columns);
     return Table.editor()
       .tableId(changeTable.getSourceTableId())
@@ -304,7 +406,7 @@ public class SqlServerConnection extends JdbcConnection {
       .create();
   }
 
-  public Table getTableSchemaFromChangeTable(ChangeTable changeTable) throws SQLException {
+  public Table getTableSchemaFromChangeTable(SqlServerChangeTable changeTable) throws SQLException {
     final DatabaseMetaData metadata = connection().getMetaData();
     final TableId changeTableId = changeTable.getChangeTableId();
 
@@ -316,8 +418,8 @@ public class SqlServerConnection extends JdbcConnection {
     }
 
     // The first 5 columns and the last column of the change table are CDC metadata
-    final List<Column> columns = columnEditors.subList(CHANGE_TABLE_DATA_COLUMN_OFFSET, columnEditors.size() - 1)
-      .stream()
+    final List<Column> columns = columnEditors.subList(CHANGE_TABLE_DATA_COLUMN_OFFSET,
+                                                       columnEditors.size() - 1).stream()
       .map(c -> c.position(c.position() - CHANGE_TABLE_DATA_COLUMN_OFFSET).create())
       .collect(Collectors.toList());
 
@@ -335,12 +437,6 @@ public class SqlServerConnection extends JdbcConnection {
       .create();
   }
 
-  public synchronized void rollback() throws SQLException {
-    if (isConnected()) {
-      connection().rollback();
-    }
-  }
-
   public String getNameOfChangeTable(String captureName) {
     return captureName + "_CT";
   }
@@ -349,12 +445,71 @@ public class SqlServerConnection extends JdbcConnection {
     return realDatabaseName;
   }
 
-  private  String retrieveRealDatabaseName() {
+  private ZoneId retrieveTransactionTimezone(boolean supportsAtTimeZone) {
+    final String serverTimezoneConfig = config().getString(SERVER_TIMEZONE_PROP_NAME);
+
+    if (supportsAtTimeZone) {
+      if (serverTimezoneConfig != null) {
+        LOGGER.warn("The '{}' option should not be specified with SQL Server 2016 and newer",
+                    SERVER_TIMEZONE_PROP_NAME);
+      }
+    } else {
+      if (serverTimezoneConfig == null) {
+        LOGGER.warn(
+          "The '{}' option should be specified to avoid incorrect timestamp values in case of different " +
+            "timezones between the database server and this connector's JVM.",
+          SERVER_TIMEZONE_PROP_NAME);
+      }
+    }
+
+    // Assuming UTC to be used for the ts_ms TIMESTAMP column
+    // In case AT TIME ZONE is supported, UTC is what we'll request;
+    // Otherwise, UTC is as good as any other guess
+    return serverTimezoneConfig == null ? ZoneId.of("UTC") : ZoneId.of(serverTimezoneConfig, ZoneId.SHORT_IDS);
+  }
+
+  private String retrieveRealDatabaseName() {
     try {
-      return queryAndMap(GET_DATABASE_NAME,
-                         singleResultMapper(rs -> rs.getString(1), "Could not retrieve database name"));
+      return queryAndMap(
+        GET_DATABASE_NAME,
+        singleResultMapper(rs -> rs.getString(1), "Could not retrieve database name"));
     } catch (SQLException e) {
       throw new RuntimeException("Couldn't obtain database name", e);
     }
+  }
+
+  /**
+   * SELECT ... AT TIME ZONE only works on SQL Server 2016 and newer.
+   */
+  private boolean supportsAtTimeZone() {
+    try {
+      // Always expect the support if database is not standalone SQL Server, e.g. Azure
+      return getSqlServerVersion().orElse(Integer.MAX_VALUE) > 2016;
+    } catch (Exception e) {
+      LOGGER.error("Couldn't obtain database server version; assuming 'AT TIME ZONE' is not supported.", e);
+      return false;
+    }
+  }
+
+  private Optional<Integer> getSqlServerVersion() {
+    try {
+      // As per https://www.mssqltips.com/sqlservertip/1140/how-to-tell-what-sql-server-version-you-are-running/
+      // Always beginning with 'Microsoft SQL Server NNNN' but only in case SQL Server is standalone
+      String version = queryAndMap(
+        SQL_SERVER_VERSION,
+        singleResultMapper(rs -> rs.getString(1), "Could not obtain SQL Server version"));
+      if (!version.startsWith("Microsoft SQL Server ")) {
+        return Optional.empty();
+      }
+      return Optional.of(Integer.valueOf(version.substring(21, 25)));
+    } catch (Exception e) {
+      throw new RuntimeException("Couldn't obtain database server version", e);
+    }
+  }
+
+  @Override
+  protected Optional<Object> getDefaultValue(Column column, String defaultValue) {
+    return defaultValueConverter
+      .parseDefaultValue(column, defaultValue);
   }
 }
