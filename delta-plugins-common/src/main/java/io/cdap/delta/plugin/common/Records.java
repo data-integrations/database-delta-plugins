@@ -304,7 +304,8 @@ public class Records {
         for (Field field : fields) {
           cdapFields.add(Schema.Field.of(field.name(), convert(field.schema())));
         }
-        converted = Schema.recordOf(schema.name(), cdapFields);
+
+        converted = Schema.recordOf(schema.name() == null ? "dummy.schema.name" : schema.name(), cdapFields);
         break;
       default:
         // should never happen, all values are listed above
