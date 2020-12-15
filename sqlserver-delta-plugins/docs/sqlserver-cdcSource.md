@@ -57,7 +57,7 @@ Hub.
 
 Plugin Properties
 -----------
-**Host:** Hostname of the SQL server to read from.
+**Host:** Hostname or IP address of the SQL server to read from.
 
 **Port:** Port to use to connect to the SQL server.
 
@@ -67,6 +67,6 @@ Plugin Properties
 
 **Password:** Password to use to connect to the SQL server.
 
-**Database:** Database to consume events for.
+**Database:** Database to replicate data from.
 
-**JDBC Plugin Name:** Name of the jdbc driver to use.
+**JDBC Plugin Name:** Identifier for the SQLServer JDBC driver, which is the name used while uploading the SQLServer JDBC driver.
