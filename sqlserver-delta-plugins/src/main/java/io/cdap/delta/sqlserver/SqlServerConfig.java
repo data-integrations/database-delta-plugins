@@ -40,14 +40,14 @@ public class SqlServerConfig extends PluginConfig {
   @Description("Password to use to connect to the SqlServer.")
   private String password;
 
-  @Description("Database to consume events for.")
+  @Description("Database to replicate data from.")
   private String database;
 
   @Nullable
   @Description("Timezone of the SqlServer. This is used when converting dates into timestamps.")
   private String serverTimezone;
 
-  @Description("Name of the jdbc plugin to use.")
+  @Description("Identifier for the SQLServer JDBC driver, which is the name used while uploading the SQLServer JDBC driver.")
   private String jdbcPluginName;
 
   public SqlServerConfig(String host, int port, String user, String password,

@@ -43,14 +43,14 @@ public class MySqlConfig extends PluginConfig {
   @Description("A unique numeric ID to identify this origin as an event consumer.")
   private int consumerID;
 
-  @Description("Database to consume events for.")
+  @Description("Database to replicate data from.")
   private String database;
 
   @Nullable
   @Description("Timezone of the MySQL server. This is used when converting dates into timestamps.")
   private String serverTimezone;
 
-  @Description("Name of the jdbc plugin to use.")
+  @Description("Identifier for the MySQL JDBC driver, which is the name used while uploading the MySQL JDBC driver.")
   private String jdbcPluginName;
 
   public MySqlConfig(String host, int port, String user, String password, int consumerID,
