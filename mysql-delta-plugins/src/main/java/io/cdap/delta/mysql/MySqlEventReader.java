@@ -25,11 +25,14 @@ import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
+import io.debezium.DebeziumException;
+import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.connector.mysql.MySqlJdbcContext;
 import io.debezium.connector.mysql.MySqlValueConverters;
+import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.jdbc.JdbcValueConverters;
@@ -132,7 +135,7 @@ public class MySqlEventReader implements EventReader {
     }
 
     MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
-    DdlParser ddlParser = mysqlConf.getDdlParsingMode().getNewParserInstance(mySqlValueConverters, tableId -> true);
+    DdlParser ddlParser = new MySqlAntlrDdlParser(mySqlValueConverters, tableId -> true);
 
     ClassLoader oldCL = Thread.currentThread().getContextClassLoader();
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
@@ -179,7 +182,11 @@ public class MySqlEventReader implements EventReader {
 
     boolean timeAdjusterEnabled = configuration.getConfig().getBoolean(MySqlConnectorConfig.ENABLE_TIME_ADJUSTER);
     return new MySqlValueConverters(decimalMode, timePrecisionMode, bigIntUnsignedMode,
-                                    timeAdjusterEnabled ? MySqlEventReader::adjustTemporal : x -> x);
+                                    CommonConnectorConfig.BinaryHandlingMode.BYTES,
+                                    timeAdjusterEnabled ? MySqlEventReader::adjustTemporal : x -> x,
+                                    (message, exception) -> {
+      throw new DebeziumException(message, exception);
+    });
   }
 
   private static Temporal adjustTemporal(Temporal temporal) {
