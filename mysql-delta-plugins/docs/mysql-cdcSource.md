@@ -65,9 +65,9 @@ slave that is replicating from the server.
 
 **Password:** Password to use to connect to the MySQL server.
 
-**Database:** Database to consume events for.
+**Database:** Database to replicate data from.
 
-**JDBC Plugin Name:** Name of the jdbc driver to use.
+**JDBC Plugin Name:** Identifier for the MySQL JDBC driver, which is the name used while uploading the MySQL JDBC driver.
 
 Troubleshooting
 -----------
@@ -85,4 +85,4 @@ common starting from MySQL 8 on up. To fix this, run the following command:
 ALTER USER '[user]'@'[host]' IDENTIFIED WITH mysql_native_password BY '[password]'
 ```
 
-to change the user to use a mysql native password.
+to change the user to use a MySQL native password.
