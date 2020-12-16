@@ -43,11 +43,14 @@ mysql> GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIE
 mysql> FLUSH PRIVILEGES;
 ```
 
-
+If using a hosted option such as Amazon RDS or Amazon Aurora that do not allow a global read lock, table-level locks are
+used to create the consistent snapshot. In this case, you need to also grant LOCK_TABLES permissions to the user that
+you create.
 
 Setting up JDBC Driver
 -----------
-If it is not already installed, instructions for installing the MySQL JDBC driver can be found on the Hub.
+If it is not already installed, instructions for installing the MySQL JDBC driver can be found on the Hub. The MySQL
+JDBC driver installed should be version 8 or above.
 
 Plugin Properties
 -----------
