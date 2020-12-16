@@ -99,6 +99,13 @@ public class SqlServerTableRegistry implements TableRegistry {
   }
 
   @Override
+  public TableDetail describeTable(String database, String schema, String table)
+    throws TableNotFoundException, IOException {
+    // TODO CDAP-17477 Ignore schema currently since its fetch from metadata in sql server
+    return describeTable(database, table);
+  }
+
+  @Override
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
       List<Problem> missingFeatures = new ArrayList<>();
