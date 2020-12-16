@@ -33,7 +33,8 @@ public class MySqlConfig extends PluginConfig {
   @Description("Port to use to connect to the MySQL server.")
   private int port;
 
-  @Description("Username to use to connect to the MySQL server.")
+  @Description("Username to use to connect to the MySQL server. Actual account used by the source while connecting " +
+    "to the MySQL server will be of the form 'user_name'@'%' where user_name is this field.")
   private String user;
 
   @Macro
