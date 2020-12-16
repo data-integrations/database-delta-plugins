@@ -159,11 +159,12 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
   }
 
   private void checkReplicationPermissions(List<Problem> featureProblems, List<String> permissions) {
-    String query = String.format("SHOW GRANTS FOR '%s'@'%s'", conf.getUser(), conf.getHost());
+    String clientHost = "%";
+    String query = String.format("SHOW GRANTS FOR '%s'@'%s'", conf.getUser(), clientHost);
     Problem permissionUnknownProblem =
       new Problem("Table Replication Permission Unknown",
                   String.format("Unable to check if '%s' permissions were granted for user '%s'@'%s' or not",
-                                String.join(",", permissions), conf.getUser(), conf.getHost()),
+                                String.join(",", permissions), conf.getUser(), clientHost),
                   "Check database connectivity and user permissions",
                   "Change events might fail to be read after the snapshot phase");
     try (Connection connection = DriverManager.getConnection(conf.getJdbcURL(), conf.getConnectionProperties());
@@ -188,9 +189,9 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
             featureProblems.add(
               new Problem("Table Replication Permission Not Granted",
                           String.format("The '%s' permission is not granted for user '%s'@'%s'", permission,
-                                        conf.getUser(), conf.getHost()),
+                                        conf.getUser(), clientHost),
                           String.format("Grant '%s' permission to user '%s'@'%s'", permission,
-                                        conf.getUser(), conf.getHost()),
+                                        conf.getUser(), clientHost),
                           "Will not be able to read replication events after the initial snapshot completes."));
           }
         }
