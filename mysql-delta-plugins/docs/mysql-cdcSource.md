@@ -38,8 +38,8 @@ wait_timeout        = <duration-in-seconds>
 A MySQL user must be defined with all the following permissions on any database which wants to be replicated:
 **SELECT**, **RELOAD**, **SHOW DATABASES**, **REPLICATION SLAVE** and **REPLICATION CLIENT**.
 ```
-mysql> CREATE USER 'user'@'localhost' IDENTIFIED BY 'password';
-mysql> GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user' IDENTIFIED WITH mysql_native_password BY 'password';
+mysql> CREATE USER 'user'@'%' IDENTIFIED BY 'password';
+mysql> GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'user'@'%' IDENTIFIED WITH mysql_native_password BY 'password';
 mysql> FLUSH PRIVILEGES;
 ```
 
@@ -64,7 +64,8 @@ slave that is replicating from the server.
 
 **Server Timezone:** Timezone of the MySQL server. This is used when converting dates into timestamps.
 
-**User:** Username to use to connect to the MySQL server.
+**User:** Username to use to connect to the MySQL server. Actual account used by the source while connecting 
+to the MySQL server will be of the form 'user_name'@'%' where user_name is this field.
 
 **Password:** Password to use to connect to the MySQL server.
 
