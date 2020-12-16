@@ -47,7 +47,8 @@ public class SqlServerConfig extends PluginConfig {
   @Description("Timezone of the SqlServer. This is used when converting dates into timestamps.")
   private String serverTimezone;
 
-  @Description("Identifier for the SQLServer JDBC driver, which is the name used while uploading the SQLServer JDBC driver.")
+  @Description("Identifier for the SQLServer JDBC driver, which is the name used while uploading the SQLServer " +
+    "JDBC driver.")
   private String jdbcPluginName;
 
   public SqlServerConfig(String host, int port, String user, String password,
