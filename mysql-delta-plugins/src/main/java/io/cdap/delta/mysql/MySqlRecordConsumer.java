@@ -56,16 +56,18 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final MySqlValueConverters mySqlValueConverters;
   private final Tables tables;
   private final Map<String, SourceTable> sourceTableMap;
+  private int schemaHistoryIndex;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
                              DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
-                             Tables tables, Map<String, SourceTable> sourceTableMap) {
+                             Tables tables, Map<String, SourceTable> sourceTableMap, int schemaHistoryIndex) {
     this.context = context;
     this.emitter = emitter;
     this.ddlParser = ddlParser;
     this.mySqlValueConverters = mySqlValueConverters;
     this.tables = tables;
     this.sourceTableMap = sourceTableMap;
+    this.schemaHistoryIndex = schemaHistoryIndex;
   }
 
   @Override
@@ -116,11 +118,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
-    Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
-    String ddl = val.get("ddl");
     StructuredRecord source = val.get("source");
     if (source == null) {
       // This should not happen, 'source' is a mandatory field in sourceRecord from debezium
@@ -130,9 +129,11 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     // If the map is empty, we should read all DDL/DML events and columns of all tables
     boolean readAllTables = sourceTableMap.isEmpty();
 
+    String ddl = val.get("ddl");
+    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
     try {
       if (ddl != null) {
-        handleDDL(ddl, recordOffset, isSnapshot, readAllTables);
+        handleDDL(ddl, deltaOffset, isSnapshot, readAllTables);
         return;
       }
 
@@ -143,15 +144,16 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
         return;
       }
 
-      handleDML(source, val, recordOffset, isSnapshot, readAllTables);
+      handleDML(source, val, deltaOffset, isSnapshot, readAllTables);
     } catch (InterruptedException e) {
       // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
       throw new StopConnectorException("Interrupted while emitting event.");
     }
   }
 
-  private void handleDML(StructuredRecord source, StructuredRecord val, Offset recordOffset,
+  private void handleDML(StructuredRecord source, StructuredRecord val, Map<String, String> deltaOffset,
                          boolean isSnapshot, boolean readAllTables) throws InterruptedException {
+    deltaOffset.put(MySqlEventReader.SCHEMA_HISTORY_INDEX, String.valueOf(schemaHistoryIndex));
     String databaseName = source.get("db");
     String tableName = source.get("table");
     SourceTable sourceTable = getSourceTable(databaseName, tableName);
@@ -198,7 +200,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder builder = DMLEvent.builder()
-      .setOffset(recordOffset)
+      .setOffset(new Offset(deltaOffset))
       .setOperationType(op)
       .setDatabaseName(databaseName)
       .setTableName(tableName)
@@ -216,8 +218,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     }
   }
 
-  private void handleDDL(String ddlStatement, Offset recordOffset,
+  private void handleDDL(String ddlStatement, Map<String, String> deltaOffset,
                          boolean isSnapshot, boolean readAllTables) throws InterruptedException {
+    deltaOffset.put(MySqlEventReader.SCHEMA_HISTORY_INDEX, String.valueOf(++schemaHistoryIndex));
     ddlParser.getDdlChanges().reset();
     ddlParser.parse(ddlStatement, tables);
     AtomicReference<InterruptedException> interrupted = new AtomicReference<>();
@@ -227,7 +230,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       }
       for (DdlParserListener.Event event : events) {
         DDLEvent.Builder builder = DDLEvent.builder()
-          .setOffset(recordOffset)
+          .setOffset(new Offset(deltaOffset))
           .setDatabaseName(databaseName)
           .setSnapshot(isSnapshot);
         DDLEvent ddlEvent = null;
