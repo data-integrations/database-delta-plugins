@@ -58,9 +58,9 @@ Plugin Properties
 
 **Port:** Port to use to connect to the MySQL server.
 
-**Consumer ID:** An unique numeric ID to identify this origin as an event consumer. This number cannot be the same as 
-another Delta Replicator that is reading from the server, and it cannot be the same as the server-id for any MySQL 
-slave that is replicating from the server.
+**Consumer ID:** Optional unique numeric ID to identify this origin as an event consumer. This number cannot be the 
+same as another Delta Replicator that is reading from the server, and it cannot be the same as the server-id for any
+ MySQL slave that is replicating from the server. By default, random number will be used. 
 
 **Server Timezone:** Timezone of the MySQL server. This is used when converting dates into timestamps.
 

@@ -93,7 +93,7 @@ public class MySqlEventReader implements EventReader {
     Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
       Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
     Map<String, String> state = offset.get(); // state map is always not null
-    Configuration debeziumConf = Configuration.create()
+    Configuration.Builder configBuilder = Configuration.create()
       .with("connector.class", MySqlConnector.class.getName())
       .with("offset.storage", MySqlConstantOffsetBackingStore.class.getName())
       .with("offset.flush.interval.ms", 1000)
@@ -110,13 +110,18 @@ public class MySqlEventReader implements EventReader {
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
       .with("database.password", config.getPassword())
-      .with("database.server.id", config.getConsumerID() + context.getInstanceId())
       .with("database.history", DBSchemaHistory.class.getName())
       .with("database.whitelist", config.getDatabase())
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
-      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
-      .build();
+      .with("table.whitelist", String.join(",", sourceTableMap.keySet()));
+
+    if (config.getConsumerID() != null) {
+      // If not provided debezium will randomly pick integer between 5400 and 6400.
+      configBuilder = configBuilder.with("database.server.id", config.getConsumerID() + context.getInstanceId());
+    }
+
+    Configuration debeziumConf = configBuilder.build();
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
     /*
