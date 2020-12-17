@@ -41,10 +41,11 @@ public class MySqlConfig extends PluginConfig {
   @Description("Password to use to connect to the MySQL server.")
   private String password;
 
-  @Description("A unique numeric ID to identify this origin as an event consumer. When replication pipeline is " +
-    "configured with multiple instances, each instance gets unique consumer id by adding instance id to " +
-    "this supplied consumer id.")
-  private int consumerID;
+  @Nullable
+  @Description("An optional unique numeric ID to identify this origin as an event consumer. When replication " +
+    "pipeline is configured with multiple instances, each instance gets unique consumer id by adding instance id to " +
+    "this supplied consumer id. By default, random number will be used.")
+  private Integer consumerID;
 
   @Description("Database to replicate data from.")
   private String database;
@@ -83,7 +84,8 @@ public class MySqlConfig extends PluginConfig {
     return password;
   }
 
-  public int getConsumerID() {
+  @Nullable
+  public Integer getConsumerID() {
     return consumerID;
   }
 
