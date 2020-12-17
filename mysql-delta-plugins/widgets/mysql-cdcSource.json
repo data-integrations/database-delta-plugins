@@ -21,11 +21,6 @@
           }
         },
         {
-          "name": "consumerID",
-          "label": "Consumer ID",
-          "widget-type": "textbox"
-        },
-        {
           "name": "jdbcPluginName",
           "label": "JDBC Plugin Name",
           "widget-type": "plugin-list",
@@ -58,6 +53,11 @@
     {
       "label": "Advanced",
       "properties": [
+        {
+          "name": "consumerID",
+          "label": "Consumer ID",
+          "widget-type": "textbox"
+        },
         {
           "name": "serverTimezone",
           "label": "Server Timezone",
