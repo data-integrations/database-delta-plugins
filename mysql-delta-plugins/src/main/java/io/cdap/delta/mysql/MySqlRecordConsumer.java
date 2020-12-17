@@ -56,16 +56,18 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final MySqlValueConverters mySqlValueConverters;
   private final Tables tables;
   private final Map<String, SourceTable> sourceTableMap;
+  private int schemaHistoryIndex;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
                              DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
-                             Tables tables, Map<String, SourceTable> sourceTableMap) {
+                             Tables tables, Map<String, SourceTable> sourceTableMap, int schemaHistoryIndex) {
     this.context = context;
     this.emitter = emitter;
     this.ddlParser = ddlParser;
     this.mySqlValueConverters = mySqlValueConverters;
     this.tables = tables;
     this.sourceTableMap = sourceTableMap;
+    this.schemaHistoryIndex = schemaHistoryIndex;
   }
 
   @Override
@@ -116,11 +118,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
-    Offset recordOffset = new Offset(deltaOffset);
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
-    String ddl = val.get("ddl");
     StructuredRecord source = val.get("source");
     if (source == null) {
       // This should not happen, 'source' is a mandatory field in sourceRecord from debezium
@@ -130,6 +129,14 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     // If the map is empty, we should read all DDL/DML events and columns of all tables
     boolean readAllTables = sourceTableMap.isEmpty();
 
+    String ddl = val.get("ddl");
+    if (ddl != null) {
+      // ddl and schema HistoryRecord is one-one mapping
+      schemaHistoryIndex++;
+    }
+
+    Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
+    Offset recordOffset = new Offset(deltaOffset);
     try {
       if (ddl != null) {
         handleDDL(ddl, recordOffset, isSnapshot, readAllTables);
@@ -368,6 +375,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     if (gtidSet != null) {
       deltaOffset.put(MySqlConstantOffsetBackingStore.GTID_SET, gtidSet);
     }
+
+    deltaOffset.put(MySqlEventReader.SCHEMA_HISTORY_INDEX, String.valueOf(schemaHistoryIndex));
 
     return deltaOffset;
   }
