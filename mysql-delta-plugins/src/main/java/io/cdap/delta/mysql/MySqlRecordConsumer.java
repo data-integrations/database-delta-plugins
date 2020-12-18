@@ -130,11 +130,6 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     boolean readAllTables = sourceTableMap.isEmpty();
 
     String ddl = val.get("ddl");
-    if (ddl != null) {
-      // ddl and schema HistoryRecord is one-one mapping
-      schemaHistoryIndex++;
-    }
-
     Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
     try {
       if (ddl != null) {
