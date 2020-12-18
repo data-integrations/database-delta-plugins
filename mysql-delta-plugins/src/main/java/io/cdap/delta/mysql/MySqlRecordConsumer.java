@@ -153,7 +153,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
   private void handleDML(StructuredRecord source, StructuredRecord val, Map<String, String> deltaOffset,
                          boolean isSnapshot, boolean readAllTables) throws InterruptedException {
-    deltaOffset.put(MySqlEventReader.SCHEMA_HISTORY_INDEX, String.valueOf(++schemaHistoryIndex));
+    deltaOffset.put(MySqlEventReader.SCHEMA_HISTORY_INDEX, String.valueOf(schemaHistoryIndex));
     String databaseName = source.get("db");
     String tableName = source.get("table");
     SourceTable sourceTable = getSourceTable(databaseName, tableName);
