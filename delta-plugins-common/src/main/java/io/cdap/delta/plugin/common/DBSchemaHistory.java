@@ -48,6 +48,7 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   public static void restartFrom(int index) throws IOException {
     if (index < 0) {
       wipeHistory();
+      return;
     }
     storeHistory(getHistory().subList(0, index + 1));
   }

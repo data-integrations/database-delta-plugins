@@ -133,7 +133,6 @@ public class MySqlEventReader implements EventReader {
       throw new RuntimeException("Unable to reset the schema history at start of replication.", e);
     }
 
-
     MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
     DdlParser ddlParser = new MySqlAntlrDdlParser(mySqlValueConverters, tableId -> true);
 
