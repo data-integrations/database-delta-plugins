@@ -17,7 +17,6 @@
 package io.cdap.delta.mysql;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.cdap.delta.api.DeltaFailureException;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -39,6 +38,7 @@ import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.jdbc.TemporalPrecisionMode;
 import io.debezium.relational.Tables;
 import io.debezium.relational.ddl.DdlParser;
+import io.debezium.relational.history.HistoryRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +59,8 @@ import java.util.stream.Collectors;
  */
 public class MySqlEventReader implements EventReader {
   public static final Logger LOG = LoggerFactory.getLogger(MySqlEventReader.class);
+
+  static final String SCHEMA_HISTORY_INDEX = "schema.history";
   private final MySqlConfig config;
   private final EventEmitter emitter;
   private final ExecutorService executorService;
@@ -124,19 +126,16 @@ public class MySqlEventReader implements EventReader {
     Configuration debeziumConf = configBuilder.build();
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
-    /*
-       this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
-       but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
-       those DDL events unless the DB history is wiped. This only fixes handling of DDL errors that
-       happen during the initial snapshot.
-        TODO: (CDAP-16735) fix this more comprehensively
+    /**
+     * DBSchemaHistory stores the historical DDL changes. Each time Debezium detects a DDL change in binlog, it will
+     * store a {@link HistoryRecord History Record} to DBSchemaHistory, in case of a failure or on purpose stop,
+     * It knows where to restart from.
      */
-    if (offset.get().isEmpty()) {
-      try {
-        DBSchemaHistory.wipeHistory();
-      } catch (IOException e) {
-        throw new RuntimeException("Unable to wipe schema history at start of replication.", e);
-      }
+    int schemaHistoryIndex = Integer.parseInt(state.getOrDefault(SCHEMA_HISTORY_INDEX, "-1"));
+    try {
+      DBSchemaHistory.restartFrom(schemaHistoryIndex);
+    } catch (IOException e) {
+      throw new RuntimeException("Unable to reset the schema history at start of replication.", e);
     }
 
     MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
@@ -149,7 +148,7 @@ public class MySqlEventReader implements EventReader {
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
         .notifying(new MySqlRecordConsumer(context, emitter, ddlParser, mySqlValueConverters,
-                                           new Tables(), sourceTableMap))
+                                           new Tables(), sourceTableMap, schemaHistoryIndex))
         .using(new NotifyingCompletionCallback(context))
         .build();
       executorService.submit(engine);
