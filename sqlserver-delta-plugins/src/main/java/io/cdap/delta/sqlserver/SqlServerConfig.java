@@ -17,7 +17,6 @@
 package io.cdap.delta.sqlserver;
 
 import io.cdap.cdap.api.annotation.Description;
-import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.plugin.PluginConfig;
 
 import javax.annotation.Nullable;
@@ -36,7 +35,6 @@ public class SqlServerConfig extends PluginConfig {
   @Description("Username to use to connect to the SqlServer.")
   private String user;
 
-  @Macro
   @Description("Password to use to connect to the SqlServer.")
   private String password;
 

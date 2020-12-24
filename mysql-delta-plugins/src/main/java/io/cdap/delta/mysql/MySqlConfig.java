@@ -17,7 +17,6 @@
 package io.cdap.delta.mysql;
 
 import io.cdap.cdap.api.annotation.Description;
-import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.plugin.PluginConfig;
 
 import java.util.Properties;
@@ -37,7 +36,6 @@ public class MySqlConfig extends PluginConfig {
     "to the MySQL server will be of the form 'user_name'@'%' where user_name is this field.")
   private String user;
 
-  @Macro
   @Description("Password to use to connect to the MySQL server.")
   private String password;
 
