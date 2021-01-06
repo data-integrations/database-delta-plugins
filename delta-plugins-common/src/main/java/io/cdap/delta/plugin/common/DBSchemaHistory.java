@@ -18,11 +18,13 @@ package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.common.Bytes;
 import io.cdap.delta.api.DeltaRuntimeContext;
+import io.debezium.connector.AbstractSourceInfo;
 import io.debezium.document.DocumentReader;
 import io.debezium.document.DocumentWriter;
 import io.debezium.relational.history.AbstractDatabaseHistory;
 import io.debezium.relational.history.DatabaseHistoryException;
 import io.debezium.relational.history.HistoryRecord;
+import io.debezium.relational.history.HistoryRecordComparator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -47,6 +49,19 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   @Override
   protected synchronized void storeRecord(HistoryRecord record) throws DatabaseHistoryException {
     List<HistoryRecord> history = getHistory();
+    //ignore the history record already seen
+    //we serialize the history record once DDL event is seen in the source
+    //however offset is committed once event is applied in the target
+    //so it's possible that debezium is resuming from a point that is earlier than the last
+    //serialized history record. And when recover the history record, debezium will ignore those
+    //history record that is later than the resuming point.
+    //Thus it's possible for Debezium to store some history record that is already serialized.
+    //And all snapshot history record will have same position
+    if (Boolean.TRUE != record.document().getDocument(HistoryRecord.Fields.POSITION)
+      .getBoolean(AbstractSourceInfo.SNAPSHOT_KEY) && !history.isEmpty() &&
+      HistoryRecordComparator.INSTANCE.isAtOrBefore(record, history.get(history.size() - 1))) {
+      return;
+    }
     history.add(record);
     String historyStr = history.stream().map(r -> {
       try {

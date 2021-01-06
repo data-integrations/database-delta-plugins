@@ -17,7 +17,6 @@
 package io.cdap.delta.mysql;
 
 import com.google.common.annotations.VisibleForTesting;
-import io.cdap.delta.api.DeltaFailureException;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
@@ -93,6 +92,7 @@ public class MySqlEventReader implements EventReader {
     Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
       Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
     Map<String, String> state = offset.get(); // state map is always not null
+    String isSnapshot = state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, "");
     Configuration.Builder configBuilder = Configuration.create()
       .with("connector.class", MySqlConnector.class.getName())
       .with("offset.storage", MySqlConstantOffsetBackingStore.class.getName())
@@ -100,7 +100,7 @@ public class MySqlEventReader implements EventReader {
       /* bind offset configs with debeizumConf */
       .with("file", state.getOrDefault(MySqlConstantOffsetBackingStore.FILE, ""))
       .with("pos", state.getOrDefault(MySqlConstantOffsetBackingStore.POS, ""))
-      .with("snapshot", state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, ""))
+      .with("snapshot", isSnapshot)
       .with("row", state.getOrDefault(MySqlConstantOffsetBackingStore.ROW, ""))
       .with("event", state.getOrDefault(MySqlConstantOffsetBackingStore.EVENT, ""))
       .with("gtids", state.getOrDefault(MySqlConstantOffsetBackingStore.GTID_SET, ""))
@@ -125,13 +125,11 @@ public class MySqlEventReader implements EventReader {
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
     /*
-       this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
-       but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
-       those DDL events unless the DB history is wiped. This only fixes handling of DDL errors that
-       happen during the initial snapshot.
-        TODO: (CDAP-16735) fix this more comprehensively
+     * All snapshot events or schema history record have same position/offset
+     * if replicator was stopped  or paused from middle of snapshot, it
+     * will resume from beginning.
      */
-    if (offset.get().isEmpty()) {
+    if (offset.get().isEmpty() || "true".equalsIgnoreCase(isSnapshot)) {
       try {
         DBSchemaHistory.wipeHistory();
       } catch (IOException e) {
