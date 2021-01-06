@@ -37,21 +37,9 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   private static final String KEY = "history";
   // Hacky, fix when usage of EmbeddedEngine is replaced
   public static DeltaRuntimeContext deltaRuntimeContext;
-  private static final DocumentWriter writer = DocumentWriter.defaultWriter();
-  private static final DocumentReader reader = DocumentReader.defaultReader();
+  private final DocumentWriter writer = DocumentWriter.defaultWriter();
+  private final DocumentReader reader = DocumentReader.defaultReader();
 
-  /**
-   * Restart the DB schema history from certain {@link HistoryRecord HistoryRecord} specified by the parameter
-   * @param index the position of the {@link HistoryRecord HistoryRecord} to restart from in the history list. A
-   *              negative value will wipe out all the history
-   */
-  public static void restartFrom(int index) throws IOException {
-    if (index < 0) {
-      wipeHistory();
-      return;
-    }
-    storeHistory(getHistory().subList(0, index + 1));
-  }
   public static void wipeHistory() throws IOException {
     deltaRuntimeContext.putState(KEY, new byte[] { });
   }
@@ -60,10 +48,6 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   protected synchronized void storeRecord(HistoryRecord record) throws DatabaseHistoryException {
     List<HistoryRecord> history = getHistory();
     history.add(record);
-    storeHistory(history);
-  }
-
-  private static void storeHistory(List<HistoryRecord> history) {
     String historyStr = history.stream().map(r -> {
       try {
         return writer.write(r.document());
@@ -100,7 +84,7 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   }
 
   // TODO: cache history, should only have to read once
-  private static List<HistoryRecord> getHistory() {
+  private List<HistoryRecord> getHistory() {
     List<HistoryRecord> history = new ArrayList<>();
     try {
       byte[] historyBytes = deltaRuntimeContext.getState(KEY);
