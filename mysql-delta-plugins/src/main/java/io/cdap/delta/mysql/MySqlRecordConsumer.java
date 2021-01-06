@@ -126,7 +126,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
       // This should not happen, 'source' is a mandatory field in sourceRecord from debezium
       return;
     }
-    boolean isSnapshot = Boolean.TRUE.equals(source.get(MySqlConstantOffsetBackingStore.SNAPSHOT));
+    boolean isSnapshot = Boolean.TRUE.equals(deltaOffset.get(MySqlConstantOffsetBackingStore.SNAPSHOT));
     // If the map is empty, we should read all DDL/DML events and columns of all tables
     boolean readAllTables = sourceTableMap.isEmpty();
 

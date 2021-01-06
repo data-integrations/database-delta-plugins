@@ -98,6 +98,7 @@ public class SqlServerEventReader implements EventReader {
 
     Map<String, String> state = offset.get(); // this will never be null
     // offset config
+    String isSnapshotCompleted = state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, "");
     Configuration debeziumConf = Configuration.create()
       .with("connector.class", SqlServerConnector.class.getName())
       .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
@@ -106,7 +107,7 @@ public class SqlServerEventReader implements EventReader {
       .with("change_lsn", state.getOrDefault(SourceInfo.CHANGE_LSN_KEY, ""))
       .with("commit_lsn", state.getOrDefault(SourceInfo.COMMIT_LSN_KEY, ""))
       .with("snapshot", state.getOrDefault(SourceInfo.SNAPSHOT_KEY, ""))
-      .with("snapshot_completed", state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, ""))
+      .with("snapshot_completed", isSnapshotCompleted)
       /* begin connector properties */
       .with("name", "delta")
       .with("database.hostname", config.getHost())
@@ -127,13 +128,11 @@ public class SqlServerEventReader implements EventReader {
       new HashSet<>(Arrays.asList(snapshotTablesStr.split(SqlServerOffset.DELIMITER)));
 
     /*
-       this is required in scenarios where the source is able to emit the starting DDL events during snapshotting,
-       but the target is unable to apply them. In that case, this reader will be created again, but it won't re-emit
-       those DDL events unless the DB history is wiped. This only fixes handling of DDL errors that
-       happen during the initial snapshot.
-        TODO: (CDAP-16735) fix this more comprehensively
+     * All snapshot events or schema history record have same position/offset
+     * if replicator was stopped  or paused from middle of snapshot, it
+     * will resume from beginning.
      */
-    if (offset.get().isEmpty()) {
+    if (offset.get().isEmpty() || !"true".equalsIgnoreCase(isSnapshotCompleted)) {
       try {
         DBSchemaHistory.wipeHistory();
       } catch (IOException e) {
