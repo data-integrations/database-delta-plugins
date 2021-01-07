@@ -81,14 +81,8 @@ public class SqlServerTableRegistry implements TableRegistry {
             if (!tableNames.contains(tableName)) {
               continue;
             }
-            Optional<TableDetail.Builder> builder = getTableDetailBuilder(dbMeta, config.getDatabase(), tableName);
-            if (!builder.isPresent()) {
-              // shouldn't happen
-              continue;
-            }
-            TableDetail tableDetail = builder.get().build();
-            tables.add(new TableSummary(config.getDatabase(), tableName, tableDetail.getNumColumns(),
-                                        tableDetail.getSchema()));
+            // ignore the total number of columns for listing tables
+            tables.add(new TableSummary(config.getDatabase(), tableName, 0, null));
           }
         }
         return new TableList(tables);
