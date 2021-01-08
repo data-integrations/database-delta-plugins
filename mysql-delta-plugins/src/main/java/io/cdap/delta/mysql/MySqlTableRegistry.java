@@ -59,17 +59,11 @@ public class MySqlTableRegistry implements TableRegistry {
     try (Connection connection = DriverManager.getConnection(getConnectionString(conf.getDatabase()),
                                                              conf.getConnectionProperties())) {
       DatabaseMetaData dbMeta = connection.getMetaData();
-      try (ResultSet tableResults = dbMeta.getTables(null, null, null, null)) {
+      try (ResultSet tableResults = dbMeta.getTables(conf.getDatabase(), null, null, null)) {
         while (tableResults.next()) {
           String tableName = tableResults.getString(3);
-          Optional<TableDetail.Builder> builder = getTableDetailBuilder(dbMeta, conf.getDatabase(), tableName);
-          if (!builder.isPresent()) {
-            // shouldn't happen
-            continue;
-          }
-          TableDetail tableDetail = builder.get().build();
-          tables.add(new TableSummary(conf.getDatabase(), tableName, tableDetail.getNumColumns(),
-                                      tableDetail.getSchema()));
+          // ignore the total number of columns for listing tables
+          tables.add(new TableSummary(conf.getDatabase(), tableName, 0, null));
         }
       }
       return new TableList(tables);
