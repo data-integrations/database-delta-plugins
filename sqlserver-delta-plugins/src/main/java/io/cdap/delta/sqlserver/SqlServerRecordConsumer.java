@@ -148,6 +148,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
       try {
         // try to always drop the table before snapshot the schema.
+        LOG.info("D: {}", tableName);
         emitter.emit(builder.setOperation(DDLOperation.Type.DROP_TABLE)
                        .setTableName(tableName)
                        .build());
@@ -155,6 +156,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         // try to emit create database event before create table event
         emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_DATABASE).build());
 
+        LOG.info("C: {}", tableName);
         emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_TABLE)
                        .setTableName(tableName)
                        .setSchema(schema)
@@ -189,6 +191,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     try {
+      LOG.info("OP: {}, id: {}", op, value.get("id"));
       emitter.emit(dmlBuilder.build());
     } catch (InterruptedException e) {
       // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
