@@ -81,8 +81,9 @@ public class SqlServerTableRegistry implements TableRegistry {
             if (!tableNames.contains(tableName)) {
               continue;
             }
+            String schemaName = tableResults.getString("TABLE_SCHEM");
             // ignore the total number of columns for listing tables
-            tables.add(new TableSummary(config.getDatabase(), tableName, 0, null));
+            tables.add(new TableSummary(config.getDatabase(), tableName, 0, schemaName));
           }
         }
         return new TableList(tables);
