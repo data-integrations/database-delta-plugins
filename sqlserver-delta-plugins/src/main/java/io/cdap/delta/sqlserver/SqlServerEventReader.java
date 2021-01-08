@@ -98,6 +98,7 @@ public class SqlServerEventReader implements EventReader {
 
     Map<String, String> state = offset.get(); // this will never be null
     // offset config
+    LOG.info("Restarting Reader from : {}", state.toString());
     String isSnapshotCompleted = state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, "");
     Configuration debeziumConf = Configuration.create()
       .with("connector.class", SqlServerConnector.class.getName())
