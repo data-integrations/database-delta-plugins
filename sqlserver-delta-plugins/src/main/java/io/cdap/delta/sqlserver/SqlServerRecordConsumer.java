@@ -58,15 +58,13 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private boolean isFirst = true;
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
-                          Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap,
-    Map<String, String> startingOffset) {
+    Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap, Map<String, String> startingOffset) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.snapshotTables = snapshotTables;
     this.sourceTableMap = sourceTableMap;
     this.startingOffset = startingOffset;
-
   }
 
   @Override
@@ -90,7 +88,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       if (!sqlServerOffset.isSnapshot() &&
         sqlServerOffset.getCommitLsn().equals(startingOffset.get(SourceInfo.COMMIT_LSN_KEY)) &&
         sqlServerOffset.getChangeLsn().equals(startingOffset.get(SourceInfo.CHANGE_LSN_KEY))) {
-        LOG.debug("Got dup source record : {} ", sourceRecord);
+        LOG.debug("Got duplicated source record : {} ", sourceRecord);
         return;
       }
     }
