@@ -18,11 +18,13 @@ package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.common.Bytes;
 import io.cdap.delta.api.DeltaRuntimeContext;
+import io.debezium.connector.AbstractSourceInfo;
 import io.debezium.document.DocumentReader;
 import io.debezium.document.DocumentWriter;
 import io.debezium.relational.history.AbstractDatabaseHistory;
 import io.debezium.relational.history.DatabaseHistoryException;
 import io.debezium.relational.history.HistoryRecord;
+import io.debezium.relational.history.HistoryRecordComparator;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,21 +39,9 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   private static final String KEY = "history";
   // Hacky, fix when usage of EmbeddedEngine is replaced
   public static DeltaRuntimeContext deltaRuntimeContext;
-  private static final DocumentWriter writer = DocumentWriter.defaultWriter();
-  private static final DocumentReader reader = DocumentReader.defaultReader();
+  private final DocumentWriter writer = DocumentWriter.defaultWriter();
+  private final DocumentReader reader = DocumentReader.defaultReader();
 
-  /**
-   * Restart the DB schema history from certain {@link HistoryRecord HistoryRecord} specified by the parameter
-   * @param index the position of the {@link HistoryRecord HistoryRecord} to restart from in the history list. A
-   *              negative value will wipe out all the history
-   */
-  public static void restartFrom(int index) throws IOException {
-    if (index < 0) {
-      wipeHistory();
-      return;
-    }
-    storeHistory(getHistory().subList(0, index + 1));
-  }
   public static void wipeHistory() throws IOException {
     deltaRuntimeContext.putState(KEY, new byte[] { });
   }
@@ -59,11 +49,20 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   @Override
   protected synchronized void storeRecord(HistoryRecord record) throws DatabaseHistoryException {
     List<HistoryRecord> history = getHistory();
+    //ignore the history record already seen
+    //we serialize the history record once DDL event is seen in the source
+    //however offset is committed once event is applied in the target
+    //so it's possible that debezium is resuming from a point that is earlier than the last
+    //serialized history record. And when recover the history record, debezium will ignore those
+    //history record that is later than the resuming point.
+    //Thus it's possible for Debezium to store some history record that is already serialized.
+    //And all snapshot history record will have same position
+    if (Boolean.TRUE != record.document().getDocument(HistoryRecord.Fields.POSITION)
+      .getBoolean(AbstractSourceInfo.SNAPSHOT_KEY) && !history.isEmpty() &&
+      HistoryRecordComparator.INSTANCE.isAtOrBefore(record, history.get(history.size() - 1))) {
+      return;
+    }
     history.add(record);
-    storeHistory(history);
-  }
-
-  private static void storeHistory(List<HistoryRecord> history) {
     String historyStr = history.stream().map(r -> {
       try {
         return writer.write(r.document());
@@ -100,7 +99,7 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   }
 
   // TODO: cache history, should only have to read once
-  private static List<HistoryRecord> getHistory() {
+  private List<HistoryRecord> getHistory() {
     List<HistoryRecord> history = new ArrayList<>();
     try {
       byte[] historyBytes = deltaRuntimeContext.getState(KEY);

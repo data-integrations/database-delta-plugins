@@ -38,7 +38,6 @@ import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.jdbc.TemporalPrecisionMode;
 import io.debezium.relational.Tables;
 import io.debezium.relational.ddl.DdlParser;
-import io.debezium.relational.history.HistoryRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,8 +58,6 @@ import java.util.stream.Collectors;
  */
 public class MySqlEventReader implements EventReader {
   public static final Logger LOG = LoggerFactory.getLogger(MySqlEventReader.class);
-
-  static final String SCHEMA_HISTORY_INDEX = "schema.history";
   private final MySqlConfig config;
   private final EventEmitter emitter;
   private final ExecutorService executorService;
@@ -95,6 +92,7 @@ public class MySqlEventReader implements EventReader {
     Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
       Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
     Map<String, String> state = offset.get(); // state map is always not null
+    String isSnapshot = state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, "");
     Configuration.Builder configBuilder = Configuration.create()
       .with("connector.class", MySqlConnector.class.getName())
       .with("offset.storage", MySqlConstantOffsetBackingStore.class.getName())
@@ -102,7 +100,7 @@ public class MySqlEventReader implements EventReader {
       /* bind offset configs with debeizumConf */
       .with("file", state.getOrDefault(MySqlConstantOffsetBackingStore.FILE, ""))
       .with("pos", state.getOrDefault(MySqlConstantOffsetBackingStore.POS, ""))
-      .with("snapshot", state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, ""))
+      .with("snapshot", isSnapshot)
       .with("row", state.getOrDefault(MySqlConstantOffsetBackingStore.ROW, ""))
       .with("event", state.getOrDefault(MySqlConstantOffsetBackingStore.EVENT, ""))
       .with("gtids", state.getOrDefault(MySqlConstantOffsetBackingStore.GTID_SET, ""))
@@ -126,16 +124,17 @@ public class MySqlEventReader implements EventReader {
     Configuration debeziumConf = configBuilder.build();
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
-    /**
-     * DBSchemaHistory stores the historical DDL changes. Each time Debezium detects a DDL change in binlog, it will
-     * store a {@link HistoryRecord History Record} to DBSchemaHistory, in case of a failure or on purpose stop,
-     * It knows where to restart from.
+    /*
+     * All snapshot events or schema history record have same position/offset
+     * if replicator was stopped  or paused from middle of snapshot, it
+     * will resume from beginning.
      */
-    int schemaHistoryIndex = Integer.parseInt(state.getOrDefault(SCHEMA_HISTORY_INDEX, "-1"));
-    try {
-      DBSchemaHistory.restartFrom(schemaHistoryIndex);
-    } catch (IOException e) {
-      throw new RuntimeException("Unable to reset the schema history at start of replication.", e);
+    if (offset.get().isEmpty() || "true".equalsIgnoreCase(isSnapshot)) {
+      try {
+        DBSchemaHistory.wipeHistory();
+      } catch (IOException e) {
+        throw new RuntimeException("Unable to wipe schema history at start of replication.", e);
+      }
     }
 
     MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
@@ -148,7 +147,7 @@ public class MySqlEventReader implements EventReader {
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
         .notifying(new MySqlRecordConsumer(context, emitter, ddlParser, mySqlValueConverters,
-                                           new Tables(), sourceTableMap, schemaHistoryIndex))
+                                           new Tables(), sourceTableMap))
         .using(new NotifyingCompletionCallback(context))
         .build();
       executorService.submit(engine);
