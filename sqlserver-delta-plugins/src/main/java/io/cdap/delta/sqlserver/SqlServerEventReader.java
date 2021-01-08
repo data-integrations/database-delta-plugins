@@ -104,10 +104,10 @@ public class SqlServerEventReader implements EventReader {
       .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
       .with("offset.flush.interval.ms", 1000)
       /* bind offset configs with debeizumConf */
-      .with("change_lsn", state.getOrDefault(SourceInfo.CHANGE_LSN_KEY, ""))
-      .with("commit_lsn", state.getOrDefault(SourceInfo.COMMIT_LSN_KEY, ""))
-      .with("snapshot", state.getOrDefault(SourceInfo.SNAPSHOT_KEY, ""))
-      .with("snapshot_completed", isSnapshotCompleted)
+      .with(SourceInfo.CHANGE_LSN_KEY, state.getOrDefault(SourceInfo.CHANGE_LSN_KEY, ""))
+      .with(SourceInfo.COMMIT_LSN_KEY, state.getOrDefault(SourceInfo.COMMIT_LSN_KEY, ""))
+      .with(SourceInfo.SNAPSHOT_KEY, state.getOrDefault(SourceInfo.SNAPSHOT_KEY, ""))
+      .with(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, isSnapshotCompleted)
       /* begin connector properties */
       .with("name", "delta")
       .with("database.hostname", config.getHost())
@@ -147,7 +147,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap, state))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();

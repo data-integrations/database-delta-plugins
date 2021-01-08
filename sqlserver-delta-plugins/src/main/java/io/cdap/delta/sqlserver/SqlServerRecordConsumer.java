@@ -27,6 +27,7 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
+import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.embedded.StopConnectorException;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -53,14 +54,19 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final String databaseName;
   private final Set<String> snapshotTables;
   private final Map<String, SourceTable> sourceTableMap;
+  private final Map<String, String> startingOffset;
+  private boolean isFirst = true;
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
-                          Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap) {
+                          Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap,
+    Map<String, String> startingOffset) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.snapshotTables = snapshotTables;
     this.sourceTableMap = sourceTableMap;
+    this.startingOffset = startingOffset;
+
   }
 
   @Override
@@ -75,6 +81,19 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     SqlServerOffset sqlServerOffset = new SqlServerOffset(sourceRecord.sourceOffset());
+    // SQL server connector will relay the last event at offset
+    // It doesn't happen for Mysql connector, probably a bug
+    // need to ignore it and to be safe , still check whether it's same as starting offset
+    // in case in the future the bug was fixed.
+    if (isFirst) {
+      isFirst = false;
+      if (!sqlServerOffset.isSnapshot() &&
+        sqlServerOffset.getCommitLsn().equals(startingOffset.get(SourceInfo.COMMIT_LSN_KEY)) &&
+        sqlServerOffset.getChangeLsn().equals(startingOffset.get(SourceInfo.CHANGE_LSN_KEY))) {
+        LOG.debug("Got dup source record : {} ", sourceRecord);
+        return;
+      }
+    }
     sqlServerOffset.setSnapshotTables(snapshotTables);
     boolean isSnapshot = sqlServerOffset.isSnapshot();
     Offset recordOffset = sqlServerOffset.getAsOffset();

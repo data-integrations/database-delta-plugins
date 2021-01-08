@@ -50,6 +50,14 @@ public class SqlServerOffset {
     return Boolean.TRUE.equals(isSnapshot);
   }
 
+  public String getChangeLsn() {
+    return changeLsn;
+  }
+
+  public String getCommitLsn() {
+    return commitLsn;
+  }
+
   void setSnapshotTables(Set<String> snapshotTables) {
     this.snapshotTables = new HashSet<>(snapshotTables);
   }
