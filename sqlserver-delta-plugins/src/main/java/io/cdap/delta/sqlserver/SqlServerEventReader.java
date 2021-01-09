@@ -147,7 +147,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap, offset))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();
