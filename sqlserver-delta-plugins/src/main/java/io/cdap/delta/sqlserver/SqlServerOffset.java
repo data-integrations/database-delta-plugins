@@ -17,6 +17,7 @@
 package io.cdap.delta.sqlserver;
 
 import io.cdap.delta.api.Offset;
+import io.debezium.connector.sqlserver.Lsn;
 import io.debezium.connector.sqlserver.SourceInfo;
 
 import java.util.HashMap;
@@ -77,6 +78,19 @@ public class SqlServerOffset {
     }
 
     return new Offset(deltaOffset);
+  }
+
+  /**
+   * Returns whether the this {@link SqlServerOffset SqlServerOffset} instance is before or at the specified delta
+   * offset. If it's true that means this {@link SqlServerOffset SqlServerOffset} was once seen by the SQLServer
+   * Debezium connector at the specified delta offset
+   * @param deltaOffset the delta offset to compare
+   * @return whether the this {@link SqlServerOffset SqlServerOffset} instance is before or at the specified delta
+   * offset.
+   */
+  public boolean isBeforeOrAt(Offset deltaOffset) {
+    return Lsn.valueOf(this.changeLsn)
+      .compareTo(Lsn.valueOf(deltaOffset.get().get(SourceInfo.CHANGE_LSN_KEY))) < 1;
   }
 
   @Override
