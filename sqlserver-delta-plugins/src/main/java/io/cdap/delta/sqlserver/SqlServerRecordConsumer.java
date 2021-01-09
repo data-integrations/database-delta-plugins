@@ -85,7 +85,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     // snapshotting will resume from beginning, and the whole table that is partly snapshotted
     // is supposed to be dropped first , thus no need to consider
     if (!sqlServerOffset.isSnapshot() && sqlServerOffset.isBeforeOrAt(latestOffset)) {
-      LOG.debug("Get duplicated event {} ", sourceRecord);
+      LOG.debug("Got duplicated event {} ", sourceRecord);
       return;
     }
 
