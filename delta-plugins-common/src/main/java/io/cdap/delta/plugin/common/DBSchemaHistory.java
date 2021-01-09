@@ -18,11 +18,13 @@ package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.common.Bytes;
 import io.cdap.delta.api.DeltaRuntimeContext;
+import io.debezium.config.Configuration;
 import io.debezium.connector.AbstractSourceInfo;
 import io.debezium.document.DocumentReader;
 import io.debezium.document.DocumentWriter;
 import io.debezium.relational.history.AbstractDatabaseHistory;
 import io.debezium.relational.history.DatabaseHistoryException;
+import io.debezium.relational.history.DatabaseHistoryListener;
 import io.debezium.relational.history.HistoryRecord;
 import io.debezium.relational.history.HistoryRecordComparator;
 
@@ -41,9 +43,17 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   public static DeltaRuntimeContext deltaRuntimeContext;
   private final DocumentWriter writer = DocumentWriter.defaultWriter();
   private final DocumentReader reader = DocumentReader.defaultReader();
+  private HistoryRecordComparator comparator;
 
   public static void wipeHistory() throws IOException {
     deltaRuntimeContext.putState(KEY, new byte[] { });
+  }
+
+  @Override
+  public void configure(Configuration config, HistoryRecordComparator comparator, DatabaseHistoryListener listener,
+    boolean useCatalogBeforeSchema) {
+    this.comparator = comparator == null ? HistoryRecordComparator.INSTANCE : comparator;
+    super.configure(config, comparator, listener, useCatalogBeforeSchema);
   }
 
   @Override
@@ -59,7 +69,7 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
     //And all snapshot history record will have same position
     if (Boolean.TRUE != record.document().getDocument(HistoryRecord.Fields.POSITION)
       .getBoolean(AbstractSourceInfo.SNAPSHOT_KEY) && !history.isEmpty() &&
-      HistoryRecordComparator.INSTANCE.isAtOrBefore(record, history.get(history.size() - 1))) {
+      comparator.isAtOrBefore(record, history.get(history.size() - 1))) {
       return;
     }
     history.add(record);

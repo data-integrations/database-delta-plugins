@@ -53,14 +53,18 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final String databaseName;
   private final Set<String> snapshotTables;
   private final Map<String, SourceTable> sourceTableMap;
+  private Offset latestOffset;
+
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
-                          Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap) {
+                          Set<String> snapshotTables, Map<String, SourceTable> sourceTableMap,
+    Offset latestOffset) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.snapshotTables = snapshotTables;
     this.sourceTableMap = sourceTableMap;
+    this.latestOffset = latestOffset;
   }
 
   @Override
@@ -75,9 +79,19 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     SqlServerOffset sqlServerOffset = new SqlServerOffset(sourceRecord.sourceOffset());
+    // ignore duplicated CDC event
+    // SQLServer connector will relay the last event at the offset
+    // to be safe here we check whether it's before or at the same offset
+    // snapshotting will resume from beginning, and the whole table that is partly snapshotted
+    // is supposed to be dropped first , thus no need to consider
+    if (!sqlServerOffset.isSnapshot() && sqlServerOffset.isBeforeOrAt(latestOffset)) {
+      LOG.debug("Got duplicated event {} ", sourceRecord);
+      return;
+    }
+
     sqlServerOffset.setSnapshotTables(snapshotTables);
     boolean isSnapshot = sqlServerOffset.isSnapshot();
-    Offset recordOffset = sqlServerOffset.getAsOffset();
+    latestOffset = sqlServerOffset.getAsOffset();
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     DMLOperation.Type op;
@@ -143,7 +157,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
       sqlServerOffset.addSnapshotTable(sourceTableId);
-      recordOffset = sqlServerOffset.getAsOffset();
+      Offset recordOffset = sqlServerOffset.getAsOffset();
       builder.setOffset(recordOffset);
 
       try {
@@ -174,7 +188,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
 
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder dmlBuilder = DMLEvent.builder()
-      .setOffset(recordOffset)
+      .setOffset(latestOffset)
       .setOperationType(op)
       .setDatabaseName(databaseName)
       .setTableName(tableName)
