@@ -164,13 +164,17 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         // try to always drop the table before snapshot the schema.
         emitter.emit(builder.setOperation(DDLOperation.Type.DROP_TABLE)
                        .setTableName(tableName)
+                       .setSchemaName(schemaName)
                        .build());
 
         // try to emit create database event before create table event
-        emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_DATABASE).build());
+        emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_DATABASE)
+                       .setSchemaName(schemaName)
+                       .build());
 
         emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_TABLE)
                        .setTableName(tableName)
+                       .setSchemaName(schemaName)
                        .setSchema(schema)
                        .setPrimaryKey(primaryFields)
                        .build());
@@ -191,6 +195,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       .setOffset(latestOffset)
       .setOperationType(op)
       .setDatabaseName(databaseName)
+      .setSchemaName(schemaName)
       .setTableName(tableName)
       .setRow(value)
       .setSnapshot(isSnapshot)
