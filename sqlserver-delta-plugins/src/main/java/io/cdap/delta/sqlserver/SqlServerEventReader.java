@@ -28,6 +28,7 @@ import io.debezium.config.Configuration;
 import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.connector.sqlserver.SqlServerConnection;
 import io.debezium.connector.sqlserver.SqlServerConnector;
+import io.debezium.connector.sqlserver.SqlServerErrorHandler;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
@@ -85,6 +86,7 @@ public class SqlServerEventReader implements EventReader {
                                                                      jdbcDriverClass.getName(),
                                                                      jdbcDriverClass.getClassLoader());
 
+    SqlServerErrorHandler.driverClassLoader = jdbcDriverClass.getClassLoader();
     // this is needed since sql server does not return the database information in the record
     String databaseName = config.getDatabase();
 
