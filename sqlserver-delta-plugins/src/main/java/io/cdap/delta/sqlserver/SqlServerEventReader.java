@@ -135,6 +135,7 @@ public class SqlServerEventReader implements EventReader {
      * will resume from beginning.
      */
     if (offset.get().isEmpty() || !"true".equalsIgnoreCase(isSnapshotCompleted)) {
+      snapshotTables.clear();
       try {
         DBSchemaHistory.wipeHistory();
       } catch (IOException e) {
