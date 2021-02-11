@@ -48,7 +48,7 @@ public class SqlServerOffset {
   }
 
   boolean isSnapshot() {
-    return Boolean.TRUE.equals(isSnapshot);
+    return isSnapshot;
   }
 
   void setSnapshotTables(Set<String> snapshotTables) {
