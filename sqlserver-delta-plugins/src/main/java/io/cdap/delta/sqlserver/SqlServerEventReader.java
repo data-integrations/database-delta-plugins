@@ -125,9 +125,9 @@ public class SqlServerEventReader implements EventReader {
 
     DBSchemaHistory.deltaRuntimeContext = context;
 
-    String snapshotTablesStr = state.get(SqlServerOffset.SNAPSHOT_TABLES);
-    Set<String> snapshotTables = Strings.isNullOrEmpty(snapshotTablesStr) ? new HashSet<>() :
-      new HashSet<>(Arrays.asList(snapshotTablesStr.split(SqlServerOffset.DELIMITER)));
+    String ddlEventSentStr = state.get(SqlServerOffset.DDL_EVENT_SENT);
+    Set<String> ddlEventSent = Strings.isNullOrEmpty(ddlEventSentStr) ? new HashSet<>() :
+      new HashSet<>(Arrays.asList(ddlEventSentStr.split(SqlServerOffset.DELIMITER)));
 
     /*
      * All snapshot events or schema history record have same position/offset
@@ -135,6 +135,7 @@ public class SqlServerEventReader implements EventReader {
      * will resume from beginning.
      */
     if (offset.get().isEmpty() || !"true".equalsIgnoreCase(isSnapshotCompleted)) {
+      ddlEventSent.clear();
       try {
         DBSchemaHistory.wipeHistory();
       } catch (IOException e) {
@@ -149,7 +150,7 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, snapshotTables, sourceTableMap, offset))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, ddlEventSent, sourceTableMap, offset))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();
