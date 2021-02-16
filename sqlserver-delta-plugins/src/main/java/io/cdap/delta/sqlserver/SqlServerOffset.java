@@ -31,32 +31,32 @@ import java.util.Set;
  */
 public class SqlServerOffset {
   static final String DELIMITER = ",";
-  static final String SNAPSHOT_TABLES = "snapshot_tables";
+  static final String DDL_EVENT_SENT = "ddl_event_sent";
 
   private final String changeLsn;
   private final String commitLsn;
   private final Boolean isSnapshot;
   private final Boolean isSnapshotCompleted;
-  private Set<String> snapshotTables;
+  private Set<String> ddlEventSent;
 
   SqlServerOffset(Map<String, ?> properties) {
     this.changeLsn = (String) properties.get(SourceInfo.CHANGE_LSN_KEY);
     this.commitLsn = (String) properties.get(SourceInfo.COMMIT_LSN_KEY);
     this.isSnapshot = (Boolean) properties.get(SourceInfo.SNAPSHOT_KEY);
     this.isSnapshotCompleted = (Boolean) properties.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
-    this.snapshotTables = new HashSet<>();
+    this.ddlEventSent = new HashSet<>();
   }
 
   boolean isSnapshot() {
     return Boolean.TRUE.equals(isSnapshot);
   }
 
-  void setSnapshotTables(Set<String> snapshotTables) {
-    this.snapshotTables = new HashSet<>(snapshotTables);
+  void setDdlEventSent(Set<String> ddlEventSent) {
+    this.ddlEventSent = new HashSet<>(ddlEventSent);
   }
 
   void addSnapshotTable(String table) {
-    snapshotTables.add(table);
+    ddlEventSent.add(table);
   }
 
   Offset getAsOffset() {
@@ -73,8 +73,8 @@ public class SqlServerOffset {
     if (isSnapshotCompleted != null) {
       deltaOffset.put(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, String.valueOf(isSnapshotCompleted));
     }
-    if (snapshotTables != null && !snapshotTables.isEmpty()) {
-      deltaOffset.put(SNAPSHOT_TABLES, String.join(DELIMITER, snapshotTables));
+    if (ddlEventSent != null && !ddlEventSent.isEmpty()) {
+      deltaOffset.put(DDL_EVENT_SENT, String.join(DELIMITER, ddlEventSent));
     }
 
     return new Offset(deltaOffset);
@@ -106,11 +106,11 @@ public class SqlServerOffset {
       && Objects.equals(commitLsn, that.commitLsn)
       && Objects.equals(isSnapshot, that.isSnapshot)
       && Objects.equals(isSnapshotCompleted, that.isSnapshotCompleted)
-      && Objects.equals(snapshotTables, that.snapshotTables);
+      && Objects.equals(ddlEventSent, that.ddlEventSent);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(changeLsn, commitLsn, isSnapshot, isSnapshotCompleted, snapshotTables);
+    return Objects.hash(changeLsn, commitLsn, isSnapshot, isSnapshotCompleted, ddlEventSent);
   }
 }
