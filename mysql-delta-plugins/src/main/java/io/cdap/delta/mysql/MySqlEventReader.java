@@ -119,7 +119,8 @@ public class MySqlEventReader implements EventReader {
       .with("database.whitelist", config.getDatabase())
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
-      .with("table.whitelist", String.join(",", sourceTableMap.keySet()));
+      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
+      .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only");
 
     if (config.getConsumerID() != null) {
       // If not provided debezium will randomly pick integer between 5400 and 6400.
@@ -157,7 +158,7 @@ public class MySqlEventReader implements EventReader {
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
         .notifying(new MySqlRecordConsumer(context, emitter, ddlParser, mySqlValueConverters,
-                                           new Tables(), sourceTableMap))
+                                           new Tables(), sourceTableMap, config.getReplicateExistingData()))
         .using(new NotifyingCompletionCallback(context))
         .build();
       executorService.submit(engine);

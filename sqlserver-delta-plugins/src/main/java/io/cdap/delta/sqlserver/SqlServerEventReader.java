@@ -125,7 +125,8 @@ public class SqlServerEventReader implements EventReader {
       .with("database.dbname", databaseName)
       .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
-      .with("database.serverTimezone", config.getServerTimezone());
+      .with("database.serverTimezone", config.getServerTimezone())
+      .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only");
 
     LOG.info("Overriding sql server connector configs with arguments {}", debeziumConnectorConfigs);
     for (Map.Entry<String, String> entry: debeziumConnectorConfigs.entrySet()) {
@@ -161,7 +162,8 @@ public class SqlServerEventReader implements EventReader {
       LOG.info("creating new EmbeddedEngine...");
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
-        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, ddlEventSent, sourceTableMap, offset))
+        .notifying(new SqlServerRecordConsumer(context, emitter, databaseName, ddlEventSent, sourceTableMap, offset,
+                                               config.getReplicateExistingData()))
         .using(debeziumConf)
         .using(new NotifyingCompletionCallback(context))
         .build();

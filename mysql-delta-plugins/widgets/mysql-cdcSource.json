@@ -65,6 +65,22 @@
           "widget-attributes": {
             "default": "UTC"
           }
+        },
+        {
+          "name": "replicateExistingData",
+          "label": "Replicate Existing Data",
+          "widget-type": "toggle",
+          "widget-attributes": {
+            "on": {
+              "value": "true",
+              "label": "Yes"
+            },
+            "off": {
+              "value": "false",
+              "label": "No"
+            },
+            "default": "true"
+          }
         }
       ]
     }

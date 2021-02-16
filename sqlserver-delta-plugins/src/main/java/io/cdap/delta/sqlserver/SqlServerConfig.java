@@ -51,6 +51,12 @@ public class SqlServerConfig extends PluginConfig {
     "JDBC driver.")
   private String jdbcPluginName;
 
+  @Nullable
+  @Description("Whether to replicate existing data from the source database. By default, pipeline will replicate " +
+    "the existing data from source tables. If set to false, any existing data in the source " +
+    "tables will be ignored and only changes happening after the pipeline started will be replicated.")
+  private Boolean replicateExistingData;
+
   public SqlServerConfig(String host, int port, String user, String password,
                          String database, @Nullable String serverTimezone, String jdbcPluginName) {
     this.host = host;
@@ -92,5 +98,9 @@ public class SqlServerConfig extends PluginConfig {
 
   public String getJDBCPluginId() {
     return String.format("%s.%s.%s", "sqlserversource", "jbdc", jdbcPluginName);
+  }
+
+  public boolean getReplicateExistingData() {
+    return replicateExistingData != null ? replicateExistingData : true;
   }
 }

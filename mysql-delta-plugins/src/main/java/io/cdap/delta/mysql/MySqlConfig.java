@@ -57,6 +57,12 @@ public class MySqlConfig extends PluginConfig {
   @Description("Identifier for the MySQL JDBC driver, which is the name used while uploading the MySQL JDBC driver.")
   private String jdbcPluginName;
 
+  @Nullable
+  @Description("Whether to replicate existing data from the source database. By default, pipeline will replicate " +
+    "the existing data from source tables. If set to false, any existing data in the source " +
+    "tables will be ignored and only changes happening after the pipeline started will be replicated.")
+  private Boolean replicateExistingData;
+
   public MySqlConfig(String host, int port, String user, String password, int consumerID,
                      String database, @Nullable String serverTimezone) {
     this.host = host;
@@ -115,5 +121,9 @@ public class MySqlConfig extends PluginConfig {
     properties.put("password", password);
     properties.put("serverTimezone", getServerTimezone());
     return properties;
+  }
+
+  public boolean getReplicateExistingData() {
+    return replicateExistingData != null ? replicateExistingData : true;
   }
 }
