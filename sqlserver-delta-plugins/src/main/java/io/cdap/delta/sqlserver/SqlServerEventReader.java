@@ -24,6 +24,7 @@ import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
+import io.cdap.delta.plugin.common.RuntimeArguments;
 import io.debezium.config.Configuration;
 import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.connector.sqlserver.SqlServerConnection;
@@ -52,11 +53,13 @@ import java.util.stream.Collectors;
  */
 public class SqlServerEventReader implements EventReader {
   private static final Logger LOG = LoggerFactory.getLogger(SqlServerEventReader.class);
+  private static final String SOURCE_CONNECTOR_PREFIX = "source.connector.";
   private final SqlServerConfig config;
   private final EventEmitter emitter;
   private final DeltaSourceContext context;
   private final ExecutorService executorService;
   private final Set<SourceTable> tables;
+  private final Map<String, String> debeziumConnectorConfigs;
   private volatile boolean failedStopping;
   private EmbeddedEngine engine;
 
@@ -68,6 +71,8 @@ public class SqlServerEventReader implements EventReader {
     this.tables = tables;
     this.executorService = Executors.newSingleThreadScheduledExecutor();
     this.failedStopping = false;
+    this.debeziumConnectorConfigs = RuntimeArguments.extractPrefixed(SOURCE_CONNECTOR_PREFIX,
+                                                                     context.getRuntimeArguments());
   }
 
   @Override
@@ -101,7 +106,7 @@ public class SqlServerEventReader implements EventReader {
     Map<String, String> state = offset.get(); // this will never be null
     // offset config
     String isSnapshotCompleted = state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, "");
-    Configuration debeziumConf = Configuration.create()
+    Configuration.Builder configBuilder = Configuration.create()
       .with("connector.class", SqlServerConnector.class.getName())
       .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
       .with("offset.flush.interval.ms", 1000)
@@ -120,8 +125,14 @@ public class SqlServerEventReader implements EventReader {
       .with("database.dbname", databaseName)
       .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
-      .with("database.serverTimezone", config.getServerTimezone())
-      .build();
+      .with("database.serverTimezone", config.getServerTimezone());
+
+    LOG.info("Overriding sql server connector configs with arguments {}", debeziumConnectorConfigs);
+    for (Map.Entry<String, String> entry: debeziumConnectorConfigs.entrySet()) {
+      configBuilder = configBuilder.with(entry.getKey(), entry.getValue());
+    }
+
+    Configuration debeziumConf = configBuilder.build();
 
     DBSchemaHistory.deltaRuntimeContext = context;
 

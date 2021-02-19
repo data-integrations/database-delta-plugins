@@ -24,6 +24,7 @@ import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
+import io.cdap.delta.plugin.common.RuntimeArguments;
 import io.debezium.DebeziumException;
 import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.Configuration;
@@ -58,11 +59,13 @@ import java.util.stream.Collectors;
  */
 public class MySqlEventReader implements EventReader {
   public static final Logger LOG = LoggerFactory.getLogger(MySqlEventReader.class);
+  private static final String SOURCE_CONNECTOR_PREFIX = "source.connector.";
   private final MySqlConfig config;
   private final EventEmitter emitter;
   private final ExecutorService executorService;
   private final DeltaSourceContext context;
   private final Set<SourceTable> sourceTables;
+  private final Map<String, String> debeziumConnectorConfigs;
   private EmbeddedEngine engine;
   private volatile boolean failedToStop;
 
@@ -74,6 +77,8 @@ public class MySqlEventReader implements EventReader {
     this.emitter = emitter;
     this.executorService = Executors.newSingleThreadScheduledExecutor();
     this.failedToStop = false;
+    this.debeziumConnectorConfigs = RuntimeArguments.extractPrefixed(SOURCE_CONNECTOR_PREFIX,
+                                                                     context.getRuntimeArguments());
   }
 
   @Override
@@ -119,6 +124,11 @@ public class MySqlEventReader implements EventReader {
     if (config.getConsumerID() != null) {
       // If not provided debezium will randomly pick integer between 5400 and 6400.
       configBuilder = configBuilder.with("database.server.id", config.getConsumerID() + context.getInstanceId());
+    }
+
+    LOG.info("Overriding mysql connector configs with arguments {}", debeziumConnectorConfigs);
+    for (Map.Entry<String, String> entry: debeziumConnectorConfigs.entrySet()) {
+      configBuilder = configBuilder.with(entry.getKey(), entry.getValue());
     }
 
     Configuration debeziumConf = configBuilder.build();
