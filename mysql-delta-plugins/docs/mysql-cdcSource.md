@@ -73,6 +73,10 @@ to the MySQL server will be of the form 'user_name'@'%' where user_name is this 
 
 **JDBC Plugin Name:** Identifier for the MySQL JDBC driver, which is the name used while uploading the MySQL JDBC driver.
 
+**Replicate Existing Data:** Whether to replicate existing data from the source database. By default, pipeline will 
+replicate the existing data from source tables. If set to false, any existing data in the source tables will be 
+ignored and only changes happening after the pipeline started will be replicated.
+
 Troubleshooting
 -----------
 If the replicator is able to start snapshotting the data, but fails when it switches over to read from the 

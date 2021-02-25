@@ -56,16 +56,18 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final MySqlValueConverters mySqlValueConverters;
   private final Tables tables;
   private final Map<String, SourceTable> sourceTableMap;
+  private final boolean replicateExistingData;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
                              DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
-                             Tables tables, Map<String, SourceTable> sourceTableMap) {
+                             Tables tables, Map<String, SourceTable> sourceTableMap, boolean replicateExistingData) {
     this.context = context;
     this.emitter = emitter;
     this.ddlParser = ddlParser;
     this.mySqlValueConverters = mySqlValueConverters;
     this.tables = tables;
     this.sourceTableMap = sourceTableMap;
+    this.replicateExistingData = replicateExistingData;
   }
 
   @Override
@@ -260,7 +262,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
           case DROP_TABLE:
             DdlParserListener.TableDroppedEvent droppedEvent = (DdlParserListener.TableDroppedEvent) event;
             sourceTable = getSourceTable(databaseName, droppedEvent.tableId().table());
-            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.DROP_TABLE)) {
+            if (shouldEmitDdlEventForOperation(readAllTables, sourceTable, DDLOperation.Type.DROP_TABLE) &&
+              generateDropEventOnSnapshot(isSnapshot)) {
               ddlEvent = builder.setOperation(DDLOperation.Type.DROP_TABLE)
                 .setTableName(droppedEvent.tableId().table())
                 .build();
@@ -281,7 +284,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
             }
             break;
           case DROP_DATABASE:
-            ddlEvent = builder.setOperation(DDLOperation.Type.DROP_DATABASE).build();
+            if (generateDropEventOnSnapshot(isSnapshot)) {
+              ddlEvent = builder.setOperation(DDLOperation.Type.DROP_DATABASE).build();
+            }
             break;
           case CREATE_DATABASE:
             // due to a bug in io.debezium.relational.ddl.AbstractDdlParser#signalDropDatabase
@@ -316,6 +321,19 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     if (interrupted.get() != null) {
       throw interrupted.get();
     }
+  }
+
+  // Mysql source during snapshotting process generates DROP TABLE and DROP Database
+  // events. If the source is configured to ignore replication of the existing data, most likely target table
+  // exists with the snapshot events and user do not want to re-do snapshotting. Do not generate the DROP
+  // (Table/Database) events in such cases. If user do not want to keep the existing target tables if any, they
+  // will have to delete those tables manually.
+  private boolean generateDropEventOnSnapshot(boolean isSnapshot) {
+    if (!isSnapshot) {
+      // if not snapshot event, generate DROP event as it is part of explicit DDL operation from user
+      return true;
+    }
+    return replicateExistingData;
   }
 
   private boolean shouldEmitDdlEventForOperation(boolean readAllTables, SourceTable sourceTable, DDLOperation.Type op) {

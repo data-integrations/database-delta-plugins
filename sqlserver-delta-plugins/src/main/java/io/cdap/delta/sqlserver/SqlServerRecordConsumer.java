@@ -54,18 +54,20 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   // record tables that already had DDL events sent
   private final Set<String> ddlEventSent;
   private final Map<String, SourceTable> sourceTableMap;
+  private final boolean replicateExistingData;
   private Offset latestOffset;
 
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
                           Set<String> ddlEventSent, Map<String, SourceTable> sourceTableMap,
-    Offset latestOffset) {
+                          Offset latestOffset, boolean replicateExistingData) {
     this.context = context;
     this.emitter = emitter;
     this.databaseName = databaseName;
     this.ddlEventSent = ddlEventSent;
     this.sourceTableMap = sourceTableMap;
     this.latestOffset = latestOffset;
+    this.replicateExistingData = replicateExistingData;
   }
 
   @Override
@@ -162,11 +164,13 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       builder.setOffset(recordOffset);
 
       try {
-        // try to always drop the table before snapshot the schema.
-        emitter.emit(builder.setOperation(DDLOperation.Type.DROP_TABLE)
-                       .setTableName(tableName)
-                       .setSchemaName(schemaName)
-                       .build());
+        if (replicateExistingData) {
+          // try to always drop the table before snapshot the schema.
+          emitter.emit(builder.setOperation(DDLOperation.Type.DROP_TABLE)
+                         .setTableName(tableName)
+                         .setSchemaName(schemaName)
+                         .build());
+        }
 
         // try to emit create database event before create table event
         emitter.emit(builder.setOperation(DDLOperation.Type.CREATE_DATABASE)

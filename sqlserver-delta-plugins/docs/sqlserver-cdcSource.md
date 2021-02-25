@@ -70,3 +70,7 @@ Plugin Properties
 **Database:** Database to replicate data from.
 
 **JDBC Plugin Name:** Identifier for the SQLServer JDBC driver, which is the name used while uploading the SQLServer JDBC driver.
+
+**Replicate Existing Data:** Whether to replicate existing data from the source database. By default, pipeline will 
+replicate the existing data from source tables. If set to false, any existing data in the source tables will be 
+ignored and only changes happening after the pipeline started will be replicated.
