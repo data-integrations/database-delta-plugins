@@ -32,10 +32,11 @@ USE MyDB
 GO
 
 EXEC sys.sp_cdc_enable_table
-@source_schema = N'dbo',
-@source_name   = N'MyTable',
-@role_name     = N'MyRole',
-@supports_net_changes = 1
+@source_schema  = N'dbo',
+@source_name    = N'MyTable',
+@role_name      = N'MyRole',
+@filegroup_name = N'MyDB_CT',
+@supports_net_changes = 0
 GO
 ```
 
@@ -43,7 +44,7 @@ GO
 Run following query to make sure your table has CDC assess.
 ```
 -- =========
--- Verify the user of the connector have access, this query should not have empty result
+-- Verify the user (you specify in the replicator to connect to the source DB) has access, this query should not have empty result
 -- =========
 
 EXEC sys.sp_cdc_help_change_data_capture
