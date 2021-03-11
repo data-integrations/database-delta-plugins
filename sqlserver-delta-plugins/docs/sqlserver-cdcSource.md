@@ -51,6 +51,13 @@ EXEC sys.sp_cdc_help_change_data_capture
 GO
 ```
 
+### Grant permission on user defined type
+If the tables to be replicated contain columns of user defined types, the table owner must grant EXECUTE permissions on
+the custom data types to the database user specified in the replication job.
+``````
+GRANT EXECUTE ON TYPE::YOUR_TYPE to YOUR_USER
+```
+
 Setting up JDBC Driver
 -----------
 If it is not already installed, instructions for installing the Microsoft SQL Server JDBC driver can be found on the 
