@@ -55,7 +55,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final Set<String> ddlEventSent;
   private final Map<String, SourceTable> sourceTableMap;
   private final boolean replicateExistingData;
-  private Offset latestOffset;
+  private final Offset latestOffset;
 
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
@@ -81,20 +81,16 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    SqlServerOffset sqlServerOffset = new SqlServerOffset(sourceRecord.sourceOffset());
     // ignore duplicated CDC event
     // SQLServer connector will relay the last event at the offset
     // to be safe here we check whether it's before or at the same offset
     // snapshotting will resume from beginning, and the whole table that is partly snapshotted
     // is supposed to be dropped first , thus no need to consider
+    SqlServerOffset sqlServerOffset = new SqlServerOffset(sourceRecord.sourceOffset(), ddlEventSent);
     if (!sqlServerOffset.isSnapshot() && sqlServerOffset.isBeforeOrAt(latestOffset)) {
       LOG.debug("Got duplicated event {} ", sourceRecord);
       return;
     }
-
-    sqlServerOffset.setDdlEventSent(ddlEventSent);
-    boolean isSnapshot = sqlServerOffset.isSnapshot();
-    latestOffset = sqlServerOffset.getAsOffset();
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value());
     DMLOperation.Type op;
@@ -145,23 +141,23 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    DDLEvent.Builder builder = DDLEvent.builder()
-                                 .setDatabaseName(databaseName)
-                                 .setSnapshot(isSnapshot);
-
     Schema schema = value.getSchema();
     // send the ddl events only if we see the table at the first time
     // Note: the delta app itself have prevented adding CREATE_TABLE operation into DDL blacklist for all the tables.
     if (!ddlEventSent.contains(sourceTableId)) {
+      SqlServerOffset ddlRecordOffset = new SqlServerOffset(sourceRecord.sourceOffset(), ddlEventSent);
+
+      DDLEvent.Builder builder = DDLEvent.builder()
+        .setDatabaseName(databaseName)
+        .setSnapshot(ddlRecordOffset.isSnapshot())
+        .setOffset(ddlRecordOffset.getAsOffset());
+
       StructuredRecord key = Records.convert((Struct) sourceRecord.key());
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();
       if (fields != null && !fields.isEmpty()) {
         primaryFields = fields.stream().map(Schema.Field::getName).collect(Collectors.toList());
       }
-      sqlServerOffset.addSnapshotTable(sourceTableId);
-      Offset recordOffset = sqlServerOffset.getAsOffset();
-      builder.setOffset(recordOffset);
 
       try {
         if (replicateExistingData) {
@@ -187,7 +183,6 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         // happens when the event reader is stopped. throwing this exception tells Debezium to stop right away
         throw new StopConnectorException("Interrupted while emitting an event.");
       }
-      ddlEventSent.add(sourceTableId);
     }
 
     if (!readAllTables && sourceTable.getDmlBlacklist().contains(op)) {
@@ -195,15 +190,17 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
+    ddlEventSent.add(sourceTableId);
+    SqlServerOffset dmlRecordOffset = new SqlServerOffset(sourceRecord.sourceOffset(), ddlEventSent);
     Long ingestTime = val.get("ts_ms");
     DMLEvent.Builder dmlBuilder = DMLEvent.builder()
-      .setOffset(latestOffset)
+      .setOffset(dmlRecordOffset.getAsOffset())
       .setOperationType(op)
       .setDatabaseName(databaseName)
       .setSchemaName(schemaName)
       .setTableName(tableName)
       .setRow(value)
-      .setSnapshot(isSnapshot)
+      .setSnapshot(dmlRecordOffset.isSnapshot())
       .setTransactionId(null)
       .setIngestTimestamp(ingestTime == null ? 0L : ingestTime);
 
