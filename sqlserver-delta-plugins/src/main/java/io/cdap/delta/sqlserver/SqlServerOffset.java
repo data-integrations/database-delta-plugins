@@ -37,26 +37,26 @@ public class SqlServerOffset {
   private final String commitLsn;
   private final Boolean isSnapshot;
   private final Boolean isSnapshotCompleted;
-  private Set<String> ddlEventSent;
+  private final Set<String> ddlEventSent;
 
-  SqlServerOffset(Map<String, ?> properties) {
+  SqlServerOffset(Map<String, ?> properties, Set<String> ddlEventSent) {
     this.changeLsn = (String) properties.get(SourceInfo.CHANGE_LSN_KEY);
     this.commitLsn = (String) properties.get(SourceInfo.COMMIT_LSN_KEY);
-    this.isSnapshot = (Boolean) properties.get(SourceInfo.SNAPSHOT_KEY);
-    this.isSnapshotCompleted = (Boolean) properties.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
-    this.ddlEventSent = new HashSet<>();
+    if (properties.containsKey(SourceInfo.SNAPSHOT_KEY)) {
+      this.isSnapshot = (Boolean) properties.get(SourceInfo.SNAPSHOT_KEY);
+    } else {
+      this.isSnapshot = false;
+    }
+    if (properties.containsKey(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED)) {
+      this.isSnapshotCompleted = (Boolean) properties.get(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED);
+    } else {
+      this.isSnapshotCompleted = true;
+    }
+    this.ddlEventSent = ddlEventSent;
   }
 
   boolean isSnapshot() {
     return isSnapshot;
-  }
-
-  void setDdlEventSent(Set<String> ddlEventSent) {
-    this.ddlEventSent = new HashSet<>(ddlEventSent);
-  }
-
-  void addSnapshotTable(String table) {
-    ddlEventSent.add(table);
   }
 
   Offset getAsOffset() {
