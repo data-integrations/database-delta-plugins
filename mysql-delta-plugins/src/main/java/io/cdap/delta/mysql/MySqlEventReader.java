@@ -49,6 +49,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -110,7 +111,7 @@ public class MySqlEventReader implements EventReader {
       .with("event", state.getOrDefault(MySqlConstantOffsetBackingStore.EVENT, ""))
       .with("gtids", state.getOrDefault(MySqlConstantOffsetBackingStore.GTID_SET, ""))
       /* begin connector properties */
-      .with("name", "delta")
+      .with("name", "delta" + UUID.randomUUID().toString().replace("-", ""))
       .with("database.hostname", config.getHost())
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
