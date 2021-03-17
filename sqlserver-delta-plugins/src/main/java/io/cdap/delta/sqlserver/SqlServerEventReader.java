@@ -43,7 +43,6 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -107,6 +106,7 @@ public class SqlServerEventReader implements EventReader {
     Map<String, String> state = offset.get(); // this will never be null
     // offset config
     String isSnapshotCompleted = state.getOrDefault(SqlServerConstantOffsetBackingStore.SNAPSHOT_COMPLETED, "");
+    String replicationConnectorName = "delta" + context.getInstanceId();
     Configuration.Builder configBuilder = Configuration.create()
       .with("connector.class", SqlServerConnector.class.getName())
       .with("offset.storage", SqlServerConstantOffsetBackingStore.class.getName())
@@ -117,7 +117,7 @@ public class SqlServerEventReader implements EventReader {
       .with("snapshot", state.getOrDefault(SourceInfo.SNAPSHOT_KEY, ""))
       .with("snapshot_completed", isSnapshotCompleted)
       /* begin connector properties */
-      .with("name", "delta" + UUID.randomUUID().toString().replace("-", ""))
+      .with("name", replicationConnectorName)
       .with("database.hostname", config.getHost())
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
@@ -127,7 +127,8 @@ public class SqlServerEventReader implements EventReader {
       .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
-      .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only");
+      .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only")
+      .with(SqlServerConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);
 
     LOG.info("Overriding sql server connector configs with arguments {}", debeziumConnectorConfigs);
     for (Map.Entry<String, String> entry: debeziumConnectorConfigs.entrySet()) {

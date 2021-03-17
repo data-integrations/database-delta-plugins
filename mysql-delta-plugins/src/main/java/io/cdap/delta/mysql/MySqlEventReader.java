@@ -49,7 +49,6 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -99,6 +98,7 @@ public class MySqlEventReader implements EventReader {
       Collectors.toMap(t -> config.getDatabase() + "." + t.getTable(), t -> t));
     Map<String, String> state = offset.get(); // state map is always not null
     String isSnapshot = state.getOrDefault(MySqlConstantOffsetBackingStore.SNAPSHOT, "");
+    String replicationConnectorName = "delta" + context.getInstanceId();
     Configuration.Builder configBuilder = Configuration.create()
       .with("connector.class", MySqlConnector.class.getName())
       .with("offset.storage", MySqlConstantOffsetBackingStore.class.getName())
@@ -111,7 +111,7 @@ public class MySqlEventReader implements EventReader {
       .with("event", state.getOrDefault(MySqlConstantOffsetBackingStore.EVENT, ""))
       .with("gtids", state.getOrDefault(MySqlConstantOffsetBackingStore.GTID_SET, ""))
       /* begin connector properties */
-      .with("name", "delta" + UUID.randomUUID().toString().replace("-", ""))
+      .with("name", replicationConnectorName)
       .with("database.hostname", config.getHost())
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
@@ -121,7 +121,8 @@ public class MySqlEventReader implements EventReader {
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
       .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
-      .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only");
+      .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only")
+      .with(MySqlConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);;
 
     if (config.getConsumerID() != null) {
       // If not provided debezium will randomly pick integer between 5400 and 6400.
