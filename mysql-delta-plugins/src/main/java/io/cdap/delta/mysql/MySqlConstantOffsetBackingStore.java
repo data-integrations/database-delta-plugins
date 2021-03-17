@@ -42,11 +42,9 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   static final String ROW = "row";
   static final String EVENT = "event";
   static final String GTID_SET = "gtids";
+  static final String REPLICATION_CONNECTOR_NAME = "replication.connector.name";
 
   private static final Gson GSON = new Gson();
-  // The key is hardcoded here
-  private static final ByteBuffer KEY =
-    StandardCharsets.UTF_8.encode("{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}");
 
   @Override
   public void configure(WorkerConfig config) {
@@ -57,7 +55,12 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     String rowStr = originalConfig.get(ROW);
     String eventStr = originalConfig.get(EVENT);
     String gtidSetStr = originalConfig.get(GTID_SET);
+    String replicationConnectorName = originalConfig.get(REPLICATION_CONNECTOR_NAME);
 
+    ByteBuffer key =
+      StandardCharsets.UTF_8.encode("{\"schema\":null,\"payload\":[\""
+                                      + replicationConnectorName
+                                      + "\",{\"server\":\"dummy\"}]}");
     Map<String, Object> offset = new HashMap<>();
     if (!Strings.isNullOrEmpty(fileStr)) {
       offset.put(FILE, fileStr);
@@ -82,6 +85,6 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
       return;
     }
 
-    data.put(KEY, StandardCharsets.UTF_8.encode(GSON.toJson(offset)));
+    data.put(key, StandardCharsets.UTF_8.encode(GSON.toJson(offset)));
   }
 }
