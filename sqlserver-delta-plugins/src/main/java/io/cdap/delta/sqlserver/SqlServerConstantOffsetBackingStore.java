@@ -33,8 +33,9 @@ import java.util.Map;
  */
 public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStore {
   private static final Gson GSON = new Gson();
-  private static final String KEY = "{\"schema\":null,\"payload\":[\"delta\",{\"server\":\"dummy\"}]}";
+
   static final String SNAPSHOT_COMPLETED = "snapshot_completed";
+  static final String REPLICATION_CONNECTOR_NAME = "replication.connector.name";
 
   @Override
   public void configure(WorkerConfig config) {
@@ -45,7 +46,8 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     String commitStr = originalConfig.get(SourceInfo.COMMIT_LSN_KEY);
     String snapshot = originalConfig.get(SourceInfo.SNAPSHOT_KEY);
     String snapshotCompleted = originalConfig.get(SNAPSHOT_COMPLETED);
-
+    String replicationConnectorName = originalConfig.get(REPLICATION_CONNECTOR_NAME);
+    String key = "{\"schema\":null,\"payload\":[\"" + replicationConnectorName + "\",{\"server\":\"dummy\"}]}";
     Map<String, Object> offset = new HashMap<>();
     if (!changeStr.isEmpty()) {
       offset.put(SourceInfo.CHANGE_LSN_KEY, changeStr);
@@ -67,6 +69,6 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     }
     byte[] offsetBytes = Bytes.toBytes(GSON.toJson(offset));
 
-    data.put(ByteBuffer.wrap(Bytes.toBytes(KEY)), ByteBuffer.wrap(offsetBytes));
+    data.put(ByteBuffer.wrap(Bytes.toBytes(key)), ByteBuffer.wrap(offsetBytes));
   }
 }
