@@ -17,6 +17,7 @@
 package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.data.format.StructuredRecord;
+import io.cdap.cdap.api.data.format.UnexpectedFormatException;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.delta.api.SourceColumn;
 import io.debezium.jdbc.JdbcValueConverters;
@@ -37,9 +38,11 @@ import org.apache.kafka.connect.data.Struct;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -157,6 +160,7 @@ public class Records {
     for (Schema.Field field : schema.getFields()) {
       String fieldName = field.getName();
       Field debeziumField = struct.schema().field(fieldName);
+      String debeziumSchemaName = debeziumField.schema().name();
       Object val = convert(debeziumField.schema(), struct.get(fieldName));
       Schema fieldSchema = field.getSchema();
       fieldSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullable() : fieldSchema;
@@ -168,6 +172,34 @@ public class Records {
           case DATE:
             builder.setDate(fieldName, LocalDate.ofEpochDay((int) val));
             break;
+          case DATETIME:
+            long value = (long) val;
+            try {
+              LocalDateTime localDateTime;
+              if (NanoTimestamp.SCHEMA_NAME.equals(debeziumSchemaName)) {
+                // DATETIME2(7) from SQL Server is represented as io.debezium.time.NanoTimestamp
+                // which is the number of nanoseconds past the epoch, and does not include timezone information.
+                localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(0L, value), ZoneOffset.UTC);
+              } else if (MicroTimestamp.SCHEMA_NAME.equals(debeziumSchemaName)) {
+                // DATETIME2(4), DATETIME2(5), DATETIME2(6) from SQL Server and mysql are represented as
+                // io.debezium.time.MicroTimestamp, which is the number of microseconds past the epoch, and does
+                // not include timezone information.
+                localDateTime
+                  = LocalDateTime.ofInstant(Instant.ofEpochSecond(0L, TimeUnit.MICROSECONDS.toNanos(value)),
+                                            ZoneOffset.UTC);
+              } else {
+                // DATETIME, SMALLDATETIME, DATETIME2(0), DATETIME2(1), DATETIME2(2), DATETIME2(3) from SQL Server
+                // and mysql are represented as io.debezium.time.Timestamp, which is the number of milliseconds
+                // past the epoch, and does not include timezone information
+                localDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(value), ZoneOffset.UTC);
+              }
+              builder.setDateTime(fieldName, localDateTime);
+            } catch (DateTimeParseException exception) {
+              throw new UnexpectedFormatException(
+                String.format("Field '%s' of type '%s' with value '%s' is not in ISO-8601 format.",
+                              field.getName(), debeziumSchemaName, val), exception);
+            }
+            break;
           case TIMESTAMP_MILLIS:
             builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MILLISECONDS));
             break;
@@ -178,7 +210,17 @@ public class Records {
             builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MILLISECONDS.toNanos((int) val)));
             break;
           case TIME_MICROS:
-            builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MICROSECONDS.toNanos((long) val)));
+            LocalTime localTime;
+            if (NanoTime.SCHEMA_NAME.equals(debeziumSchemaName)) {
+              // TIME(7) from SQL server represents the number of nanoseconds past midnight, and does not include
+              // timezone information.
+              localTime = LocalTime.ofNanoOfDay((long) val);
+            } else {
+              // TIME(4), TIME(5), TIME(6) which represents the number of microseconds past midnight,
+              // and does not include timezone information.
+              localTime = LocalTime.ofNanoOfDay(TimeUnit.MICROSECONDS.toNanos((long) val));
+            }
+            builder.setTime(fieldName, localTime);
             break;
           case DECIMAL:
             builder.setDecimal(fieldName, (BigDecimal) val);
@@ -278,10 +320,9 @@ public class Records {
           NanoTime.SCHEMA_NAME.equals(schema.name())) {
           converted = Schema.of(Schema.LogicalType.TIME_MICROS);
         } else if (MicroTimestamp.SCHEMA_NAME.equals(schema.name()) ||
-          NanoTimestamp.SCHEMA_NAME.equals(schema.name())) {
-          converted = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
-        } else if (Timestamp.SCHEMA_NAME.equals(schema.name())) {
-          converted = Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS);
+          NanoTimestamp.SCHEMA_NAME.equals(schema.name()) ||
+          Timestamp.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.DATETIME);
         } else {
           converted = Schema.of(Schema.Type.LONG);
         }
