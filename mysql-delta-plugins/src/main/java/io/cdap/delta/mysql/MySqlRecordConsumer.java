@@ -113,7 +113,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     } catch (IOException e) {
       LOG.warn("Unable to set source state to OK.", e);
     }
-
+    if (LOG.isTraceEnabled()) {
+      LOG.trace("Receiving source record {}", sourceRecord);
+    }
     if (sourceRecord.value() == null) {
       return;
     }
