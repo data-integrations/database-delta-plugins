@@ -117,12 +117,13 @@ public class MySqlEventReader implements EventReader {
       .with("database.user", config.getUser())
       .with("database.password", config.getPassword())
       .with("database.history", DBSchemaHistory.class.getName())
-      .with("database.whitelist", config.getDatabase())
+      .with("database.include.list", config.getDatabase())
       .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
-      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
+      .with("database.history.store.only.monitored.tables.ddl", true)
+      .with("table.include.list", String.join(",", sourceTableMap.keySet()))
       .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only")
-      .with(MySqlConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);;
+      .with(MySqlConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);
 
     if (config.getConsumerID() != null) {
       // If not provided debezium will randomly pick integer between 5400 and 6400.
@@ -135,6 +136,7 @@ public class MySqlEventReader implements EventReader {
     }
 
     Configuration debeziumConf = configBuilder.build();
+    LOG.info("Debezium configuration : {}", debeziumConf);
     MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
     DBSchemaHistory.deltaRuntimeContext = context;
     /*
