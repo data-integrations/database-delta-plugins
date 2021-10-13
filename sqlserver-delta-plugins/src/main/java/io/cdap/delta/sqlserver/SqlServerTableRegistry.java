@@ -28,6 +28,8 @@ import io.cdap.delta.api.assessment.TableRegistry;
 import io.cdap.delta.api.assessment.TableSummary;
 import io.cdap.delta.plugin.common.ColumnEvaluation;
 import io.cdap.delta.plugin.common.DriverCleanup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -44,11 +46,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
  * Sql Server table registry
  */
 public class SqlServerTableRegistry implements TableRegistry {
+  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerTableRegistry.class);
   private final String jdbcUrl;
   private final SqlServerConfig config;
   private final DriverCleanup driverCleanup;
@@ -93,24 +97,30 @@ public class SqlServerTableRegistry implements TableRegistry {
     }
   }
 
-  @Override
-  public TableDetail describeTable(String database, String schema, String table)
-    throws TableNotFoundException, IOException {
-    // TODO CDAP-17477 Ignore schema currently since its fetch from metadata in sql server
-    return describeTable(database, table);
-  }
 
   @Override
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
+    return describeTable(db, null, table);
+  }
+  @Override
+  public TableDetail describeTable(String db, @Nullable String schema, String table) throws TableNotFoundException,
+                                                                                                IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
       List<Problem> missingFeatures = new ArrayList<>();
       DatabaseMetaData dbMeta = connection.getMetaData();
-      TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, table)
+      TableDetail.Builder builder = getTableDetailBuilder(dbMeta, db, schema, table)
         .orElseThrow(() -> new TableNotFoundException(db, table, ""));
 
-      String query = String.format("SELECT [name], is_tracked_by_cdc FROM sys.tables where name = '%s'", table);
+
+      String query =
+        schema == null ? String.format("SELECT is_tracked_by_cdc FROM sys.tables where name = '%s'", table)
+                       : String.format("SELECT is_tracked_by_cdc FROM " +
+                                         "(select is_tracked_by_cdc, schema_id from sys.tables where name = '%s') as t "
+                                         + "join (select schema_id from sys.schemas where name ='%s') as s "
+                                         + "on t.schema_id = s.schema_id", table, schema);
       try (Statement statement = connection.createStatement();
            ResultSet rs = statement.executeQuery(query)) {
+        // if schema is null, get the first table matching the table name with any schema
         if (rs.next()) {
           // if cdc is enabled, then the column 'is_tracked_by_cdc' should be 1
           if (rs.getInt("is_tracked_by_cdc") != 1) {
@@ -155,21 +165,21 @@ public class SqlServerTableRegistry implements TableRegistry {
     driverCleanup.close();
   }
 
-  private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, String db, String table)
-    throws SQLException {
+  private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, @Nullable String schema,
+                                                              String db, String table) throws SQLException {
     List<ColumnDetail> columns = new ArrayList<>();
     // this schema name is needed to construct the full table name, e.g, dbo.test for debizium to fetch records from
     // sql server. The table name is constructed using [schemaName].[tableName]. However, the dbMeta is not able
     // to retrieve any result back if we pass in the full table name, the schema name has to be passed separately
     // in the second parameter.
-    String schemaName = null;
-    try (ResultSet columnResults = dbMeta.getColumns(db, null, table, null)) {
-      while (columnResults.next()) {
+    // if schema name is null, then by default we get the first table matching the table name with any schema name
+    try (ResultSet columnResults = dbMeta.getColumns(db, schema, table, null)) {
+      if (columnResults.next()) {
         Map<String, String> properties = new HashMap<>();
         properties.put(SqlServerTableAssessor.COLUMN_LENGTH, columnResults.getString("COLUMN_SIZE"));
         properties.put(SqlServerTableAssessor.SCALE, columnResults.getString("DECIMAL_DIGITS"));
         properties.put(SqlServerTableAssessor.TYPE_NAME, columnResults.getString("TYPE_NAME"));
-        schemaName = columnResults.getString("TABLE_SCHEM");
+        schema = columnResults.getString("TABLE_SCHEM");
         columns.add(new ColumnDetail(columnResults.getString("COLUMN_NAME"),
                                      JDBCType.valueOf(columnResults.getInt("DATA_TYPE")),
                                      columnResults.getBoolean("NULLABLE"),
@@ -180,13 +190,16 @@ public class SqlServerTableRegistry implements TableRegistry {
       return Optional.empty();
     }
     List<String> primaryKey = new ArrayList<>();
-    try (ResultSet keyResults = dbMeta.getPrimaryKeys(db, schemaName, table)) {
+    LOGGER.debug("Query primary key for {}.{}.{}", db, schema, table);
+    try (ResultSet keyResults = dbMeta.getPrimaryKeys(db, schema, table)) {
       while (keyResults.next()) {
-        primaryKey.add(keyResults.getString("COLUMN_NAME"));
+        String pk = keyResults.getString("COLUMN_NAME");
+        LOGGER.debug("Found primary key for {}.{}.{} : {}", db, schema, table, pk);
+        primaryKey.add(pk);
       }
     }
 
-    return Optional.of(TableDetail.builder(db, table, schemaName)
+    return Optional.of(TableDetail.builder(db, table, schema)
                          .setPrimaryKey(primaryKey)
                          .setColumns(columns));
   }
