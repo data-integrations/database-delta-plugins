@@ -102,9 +102,10 @@ public class SqlServerTableRegistry implements TableRegistry {
   public TableDetail describeTable(String db, String table) throws TableNotFoundException, IOException {
     return describeTable(db, null, table);
   }
+
   @Override
-  public TableDetail describeTable(String db, @Nullable String schema, String table) throws TableNotFoundException,
-                                                                                                IOException {
+  public TableDetail describeTable(String db, @Nullable String schema, String table)
+    throws TableNotFoundException, IOException {
     try (Connection connection = DriverManager.getConnection(jdbcUrl)) {
       List<Problem> missingFeatures = new ArrayList<>();
       DatabaseMetaData dbMeta = connection.getMetaData();
@@ -167,7 +168,7 @@ public class SqlServerTableRegistry implements TableRegistry {
   }
 
   private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, String db,
-                                                            @Nullable String schema, String table) throws SQLException {
+    @Nullable String schema, String table) throws SQLException {
     List<ColumnDetail> columns = new ArrayList<>();
     // this schema name is needed to construct the full table name, e.g, dbo.test for debizium to fetch records from
     // sql server. The table name is constructed using [schemaName].[tableName]. However, the dbMeta is not able
