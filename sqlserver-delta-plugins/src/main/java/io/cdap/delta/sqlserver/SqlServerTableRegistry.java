@@ -120,13 +120,14 @@ public class SqlServerTableRegistry implements TableRegistry {
                                          + "on t.schema_id = s.schema_id", table, schema);
       try (Statement statement = connection.createStatement();
            ResultSet rs = statement.executeQuery(query)) {
-        // if schema is null, get the first table matching the table name with any schema
+        // if schema is null, we will check any table matching the table name with any schema
         if (rs.next()) {
           // if cdc is enabled, then the column 'is_tracked_by_cdc' should be 1
           if (rs.getInt("is_tracked_by_cdc") != 1) {
             missingFeatures.add(
               new Problem("Table CDC Feature Not Enabled",
-                          String.format("The CDC feature for table '%s' in database '%s' was not enabled.", table, db),
+                          String.format("The CDC feature for table '%s' in database '%s' was not enabled.",
+                                        schema == null ? table : schema + "." + table, db),
                           "Check the table CDC settings",
                           "Not able to replicate table changes"));
           }
@@ -135,7 +136,7 @@ public class SqlServerTableRegistry implements TableRegistry {
         missingFeatures.add(
           new Problem("Unable To Check If CDC Was Enabled",
                       String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
-                                    table, db),
+                                    schema == null ? table : schema + "." + table, db),
                       "Check database connectivity and table information",
                       null));
       }
@@ -165,16 +166,16 @@ public class SqlServerTableRegistry implements TableRegistry {
     driverCleanup.close();
   }
 
-  private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, @Nullable String schema,
-                                                              String db, String table) throws SQLException {
+  private Optional<TableDetail.Builder> getTableDetailBuilder(DatabaseMetaData dbMeta, String db,
+                                                            @Nullable String schema, String table) throws SQLException {
     List<ColumnDetail> columns = new ArrayList<>();
     // this schema name is needed to construct the full table name, e.g, dbo.test for debizium to fetch records from
     // sql server. The table name is constructed using [schemaName].[tableName]. However, the dbMeta is not able
     // to retrieve any result back if we pass in the full table name, the schema name has to be passed separately
     // in the second parameter.
-    // if schema name is null, then by default we get the first table matching the table name with any schema name
+    // if schema name is null, then any table matching the table name with any schema name
     try (ResultSet columnResults = dbMeta.getColumns(db, schema, table, null)) {
-      if (columnResults.next()) {
+      while (columnResults.next()) {
         Map<String, String> properties = new HashMap<>();
         properties.put(SqlServerTableAssessor.COLUMN_LENGTH, columnResults.getString("COLUMN_SIZE"));
         properties.put(SqlServerTableAssessor.SCALE, columnResults.getString("DECIMAL_DIGITS"));
