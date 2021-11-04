@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -75,6 +76,10 @@ public class MySqlValueConverters extends JdbcValueConverters {
   public interface ParsingErrorHandler {
     void error(String message, Exception exception);
   }
+  private static final String METHOD_GET_STATIC_JAVA_ENCODING = "getStaticJavaEncodingForMysqlCharset";
+  private static final String METHOD_GET_JAVA_ENCODING = "getJavaEncodingForMysqlCharset";
+
+  private static final String CLASS_CHARSET_MAPPING = "com.mysql.cj.CharsetMapping";
 
   private static final Logger LOGGER = LoggerFactory.getLogger(MySqlValueConverters.class);
 
@@ -344,18 +349,37 @@ public class MySqlValueConverters extends JdbcValueConverters {
       return null;
     }
 
-    // This is a change from the original file, we are using the jdbcClassLoader to invoke the static method.
+    // This is a change from the original file, we are using the jdbcClassLoader to invoke the static
+    // getJavaEncodingForMysqlCharset or getStaticJavaEncodingForMysqlCharset (since mysql connector 8.0.26) method
     // Following line is from original file. Instead of getting encoding from CharsetMapping we load the class
     // using jdbcClassLoader.
     // String encoding = CharsetMapping.getJavaEncodingForMysqlCharset(mySqlCharsetName);
     String encoding;
+    Class<?> charsetMappingClass = null;
     try {
-      encoding = (String) jdbcClassLoader.loadClass("com.mysql.cj.CharsetMapping")
-        .getMethod("getJavaEncodingForMysqlCharset", String.class)
-        .invoke(null, mySqlCharsetName);
+      charsetMappingClass = jdbcClassLoader.loadClass(CLASS_CHARSET_MAPPING);
+    } catch (ClassNotFoundException e) {
+        throw new RuntimeException(String.format("Failed to load class %s: %s", CLASS_CHARSET_MAPPING,
+                                                 e.getMessage()), e);
+    }
+    Method getCharsetMethod = null;
+    try {
+      getCharsetMethod = charsetMappingClass.getMethod(METHOD_GET_JAVA_ENCODING, String.class);
+    } catch (NoSuchMethodException e) {
+      try {
+        getCharsetMethod = charsetMappingClass.getDeclaredMethod(METHOD_GET_STATIC_JAVA_ENCODING, String.class);
+        getCharsetMethod.setAccessible(true);
+      } catch (NoSuchMethodException noSuchMethodException) {
+        throw new RuntimeException(String.format("Failed to find method %s or %s for class %s",
+                                                 METHOD_GET_JAVA_ENCODING, METHOD_GET_STATIC_JAVA_ENCODING,
+                                                 CLASS_CHARSET_MAPPING));
+      }
+    }
+    try {
+      encoding = (String) getCharsetMethod.invoke(null, mySqlCharsetName);
     } catch (Exception e) {
-      throw new RuntimeException("Error while using class loader to invoke 'getJavaEncodingForMysqlCharset' " +
-                                   "static method", e);
+      throw new RuntimeException(String.format("Error while using class loader to invoke '%s.%s' static method",
+                                               CLASS_CHARSET_MAPPING, getCharsetMethod.getName()), e);
     }
     // end change from original file
 
