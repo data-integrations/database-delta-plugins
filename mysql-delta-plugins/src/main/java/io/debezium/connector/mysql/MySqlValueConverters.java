@@ -74,10 +74,7 @@ public class MySqlValueConverters extends JdbcValueConverters {
    */
   @FunctionalInterface
   public interface ParsingErrorHandler {
-
     void error(String message, Exception exception);
-
-
   }
   private static final String METHOD_GET_STATIC_JAVA_ENCODING = "getStaticJavaEncodingForMysqlCharset";
   private static final String METHOD_GET_JAVA_ENCODING = "getJavaEncodingForMysqlCharset";
