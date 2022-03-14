@@ -25,9 +25,6 @@ Note that CDC cannot be enabled for master database.
 #### Enable CDC On Table
 Enable CDC for the table 'MyTable' will look similar like this:
 ```
--- =========
--- If there is no 'role_name', you can set it as NULL.
--- =========
 USE MyDB
 GO
 
@@ -39,6 +36,9 @@ EXEC sys.sp_cdc_enable_table
 @supports_net_changes = 0
 GO
 ```
+Please reference [SQL Server Documentation](https://docs.microsoft.com/en-us/sql/relational-databases/track-changes/enable-and-disable-change-data-capture-sql-server?view=sql-server-ver15#enable-for-a-table) for the details.
+Note, the `User` you use in the replication job to connect to the database need to have `MyRole` to be able to replicate the changes.
+If you replace `MyRole` with `NULL` in above command, you can use any user in the replication job to connect to the database.
 
 #### Verify Table CDC Accessibility
 Run following query to make sure your table has CDC assess.
