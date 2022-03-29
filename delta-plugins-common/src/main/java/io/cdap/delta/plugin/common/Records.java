@@ -43,10 +43,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoField;
-import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -213,10 +210,7 @@ public class Records {
               break;
             }
             if (val instanceof String) {
-              TemporalAccessor timestamp = DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse((String) val);
-              builder.setTimestamp(fieldName, getZonedDateTime(timestamp.getLong(ChronoField.INSTANT_SECONDS),
-                                                               timestamp.get(ChronoField.MICRO_OF_SECOND),
-                                                               TimeUnit.MICROSECONDS));
+              builder.setTimestamp(fieldName, ZonedDateTime.parse((String)val));
               break;
             }
             break;
