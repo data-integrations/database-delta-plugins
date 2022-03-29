@@ -30,6 +30,7 @@ import io.debezium.time.NanoTime;
 import io.debezium.time.NanoTimestamp;
 import io.debezium.time.Time;
 import io.debezium.time.Timestamp;
+import io.debezium.time.ZonedTimestamp;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -204,7 +205,14 @@ public class Records {
             builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MILLISECONDS));
             break;
           case TIMESTAMP_MICROS:
-            builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MICROSECONDS));
+            if (val instanceof  Long) {
+              builder.setTimestamp(fieldName, getZonedDateTime((long) val, TimeUnit.MICROSECONDS));
+              break;
+            }
+            if (val instanceof String) {
+              builder.setTimestamp(fieldName, ZonedDateTime.parse((String)val));
+              break;
+            }
             break;
           case TIME_MILLIS:
             builder.setTime(fieldName, LocalTime.ofNanoOfDay(TimeUnit.MILLISECONDS.toNanos((int) val)));
@@ -239,10 +247,15 @@ public class Records {
     long mod = unit.convert(1, TimeUnit.SECONDS);
     int fraction = (int) (ts % mod);
     long tsInSeconds = unit.toSeconds(ts);
+   return getZonedDateTime(tsInSeconds, fraction, unit);
+  }
+
+  private static ZonedDateTime getZonedDateTime(long epochSecond, long fraction, TimeUnit fractionUnit) {
     // create an Instant with time in seconds and fraction which will be stored as nano seconds.
-    Instant instant = Instant.ofEpochSecond(tsInSeconds, unit.toNanos(fraction));
+    Instant instant = Instant.ofEpochSecond(epochSecond, fractionUnit.toNanos(fraction));
     return ZonedDateTime.ofInstant(instant, ZoneOffset.UTC);
   }
+
 
   private static Object convert(org.apache.kafka.connect.data.Schema schema, Object val) {
     if (val == null) {
@@ -302,7 +315,11 @@ public class Records {
         }
         break;
       case STRING:
-        converted = Schema.of(Schema.Type.STRING);
+        if (ZonedTimestamp.SCHEMA_NAME.equals(schema.name())) {
+          converted = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        } else {
+          converted = Schema.of(Schema.Type.STRING);
+        }
         break;
       case INT8:
       case INT16:
