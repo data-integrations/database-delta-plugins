@@ -17,11 +17,15 @@
 package io.cdap.delta.plugin.common;
 
 import io.cdap.cdap.api.data.format.StructuredRecord;
-import org.apache.kafka.connect.data.Schema;
+import io.cdap.cdap.api.data.schema.Schema;
+import io.debezium.time.ZonedTimestamp;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 /**
  * Test case for {@link Records} class.
@@ -29,9 +33,14 @@ import org.junit.Test;
 public class RecordsTest {
 
   @Test
-  public void testConvert() {
+  public void testConvertTinyInt() {
     String fieldName = "priority";
-    Schema dataSchema = SchemaBuilder.struct().name("TinyIntSchema").field(fieldName, Schema.INT16_SCHEMA).build();
+    org.apache.kafka.connect.data.Schema dataSchema = SchemaBuilder
+                                                        .struct()
+                                                        .name("TinyIntSchema")
+                                                        .field(fieldName,
+                                                               org.apache.kafka.connect.data.Schema.INT16_SCHEMA)
+                                                        .build();
     Struct struct = new Struct(dataSchema);
     Short val = 1;
     struct.put(fieldName, val);
@@ -41,5 +50,23 @@ public class RecordsTest {
     Assert.assertEquals(priority.getSchema(), io.cdap.cdap.api.data.schema.Schema.of(
       io.cdap.cdap.api.data.schema.Schema.Type.INT));
     Assert.assertEquals(val.intValue(), (int) convert.get(fieldName));
+  }
+
+  @Test
+  public void testConvertTimeStamp() {
+    String fieldName = "timeCreated";
+    org.apache.kafka.connect.data.Schema dataSchema =
+      SchemaBuilder.struct()
+        .name(fieldName).field(fieldName, ZonedTimestamp.schema()).build();
+    Struct struct = new Struct(dataSchema);
+    String val = "2011-12-03T10:15:30.030431+01:00";
+    struct.put(fieldName, val);
+    StructuredRecord converted = Records.convert(struct);
+    Assert.assertEquals(Schema.of(Schema.LogicalType.TIMESTAMP_MICROS),
+                        converted.getSchema().getField(fieldName).getSchema());
+    Assert.assertEquals(converted.getTimestamp(fieldName),
+                        ZonedDateTime.parse(val).withZoneSameInstant(ZoneId.of("UTC")));
+
+
   }
 }
