@@ -210,7 +210,7 @@ public class Records {
               break;
             }
             if (val instanceof String) {
-              builder.setTimestamp(fieldName, ZonedDateTime.parse((String)val));
+              builder.setTimestamp(fieldName, ZonedDateTime.parse((String) val));
               break;
             }
             break;
