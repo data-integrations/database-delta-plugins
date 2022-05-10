@@ -21,9 +21,11 @@ import io.cdap.cdap.api.metrics.Metrics;
 import io.cdap.cdap.api.plugin.PluginProperties;
 import io.cdap.delta.api.DeltaPipelineId;
 import io.cdap.delta.api.DeltaSourceContext;
+import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.ReplicationError;
 import io.cdap.delta.api.SourceTable;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -49,6 +51,11 @@ public class MockContext implements DeltaSourceContext {
   @Override
   public void setOK() {
     // no-op
+  }
+
+  @Override
+  public Offset getCommittedOffset() throws IOException {
+    return null;
   }
 
   @Override
