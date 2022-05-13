@@ -72,7 +72,7 @@ public class SqlServerTableRegistry implements TableRegistry {
       try (Statement statement = connection.createStatement()) {
         // we have to execute query here since the metadata will return sys tables back, and we cannot filter
         // that, this query only works for SQL server 2005 or above
-        String query = String.format("SELECT name FROM %s.sys.tables where is_ms_shipped = 0", config.getDatabase());
+        String query = String.format("SELECT name FROM [%s].sys.tables where is_ms_shipped = 0", config.getDatabase());
         ResultSet resultSet = statement.executeQuery(query);
         Set<String> tableNames = new HashSet<>();
         while (resultSet.next()) {
