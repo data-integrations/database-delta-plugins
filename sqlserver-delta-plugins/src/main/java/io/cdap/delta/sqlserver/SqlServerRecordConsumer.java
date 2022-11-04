@@ -22,6 +22,7 @@ import io.cdap.delta.api.DDLEvent;
 import io.cdap.delta.api.DDLOperation;
 import io.cdap.delta.api.DMLEvent;
 import io.cdap.delta.api.DMLOperation;
+import io.cdap.delta.api.DeltaFailureRuntimeException;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
@@ -121,6 +122,10 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     if (!readAllTables && sourceTable == null) {
       // shouldn't happen
       return;
+    }
+    if (sourceRecord.key() == null){
+      throw new DeltaFailureRuntimeException(String.format("Table '%s' in database '%s' has no primary key. Tables without a primary key are" +
+                                                             " not supported.", tableName, databaseName));
     }
 
     StructuredRecord before = val.get("before");

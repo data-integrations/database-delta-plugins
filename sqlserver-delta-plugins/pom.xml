@@ -31,6 +31,7 @@
     <port.file>${project.build.outputDirectory}/port.properties</port.file>
     <sqlserver.image>mcr.microsoft.com/mssql/server:2017-CU19-ubuntu-16.04</sqlserver.image>
     <sqlserver.password>D3ltaPass</sqlserver.password>
+    <powermock.version>2.0.9</powermock.version>
   </properties>
 
   <dependencies>
@@ -54,6 +55,24 @@
       <groupId>com.microsoft.sqlserver</groupId>
       <artifactId>mssql-jdbc</artifactId>
       <version>8.2.1.jre8</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.cdap.delta</groupId>
+      <artifactId>delta-api</artifactId>
+      <version>0.8.0-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-module-junit4</artifactId>
+      <version>${powermock.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.powermock</groupId>
+      <artifactId>powermock-api-mockito2</artifactId>
+      <version>${powermock.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
