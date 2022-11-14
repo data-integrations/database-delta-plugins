@@ -123,8 +123,9 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       // shouldn't happen
       return;
     }
-    if (sourceRecord.key() == null){
-      throw new DeltaFailureRuntimeException(String.format("Table '%s' in database '%s' has no primary key. Tables without a primary key are" +
+    if (sourceRecord.key() == null) {
+      throw new DeltaFailureRuntimeException(String.format("Table '%s' in database '%s' has no primary key. " +
+                                                             "Tables without a primary key are" +
                                                              " not supported.", tableName, databaseName));
     }
 
