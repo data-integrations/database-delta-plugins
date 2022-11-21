@@ -200,7 +200,7 @@ public class MySqlEventReader implements EventReader {
 
     boolean timeAdjusterEnabled = configuration.getConfig().getBoolean(MySqlConnectorConfig.ENABLE_TIME_ADJUSTER);
     return new MySqlValueConverters(decimalMode, timePrecisionMode, bigIntUnsignedMode,
-                                    CommonConnectorConfig.BinaryHandlingMode.BYTES,
+                                    configuration.binaryHandlingMode(),
                                     timeAdjusterEnabled ? MySqlEventReader::adjustTemporal : x -> x,
                                     (message, exception) -> {
       throw new DebeziumException(message, exception);
