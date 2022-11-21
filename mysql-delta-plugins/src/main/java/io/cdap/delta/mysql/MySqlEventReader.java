@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public class MySqlEventReader implements EventReader {
   public static final Logger LOG = LoggerFactory.getLogger(MySqlEventReader.class);
-  private static final String SOURCE_CONNECTOR_PREFIX = "source.connector.";
+  protected static final String SOURCE_CONNECTOR_PREFIX = "source.connector.";
   private final MySqlConfig config;
   private final EventEmitter emitter;
   private final ExecutorService executorService;

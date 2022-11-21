@@ -64,6 +64,12 @@ public class MySqlEventReaderIntegrationTest {
     Schema.Field.of("id", Schema.of(Schema.Type.INT)),
     Schema.Field.of("name", Schema.of(Schema.Type.STRING)),
     Schema.Field.of("bday", Schema.nullableOf(Schema.of(Schema.LogicalType.DATE))));
+  private static final String BINARYCOL_TABLE = "binarycoltable";
+  private static final Schema EXPECTED_BINARYCOL_SCHEMA = Schema.recordOf(
+    BINARYCOL_TABLE,
+    Schema.Field.of("id", Schema.of(Schema.Type.INT)),
+    Schema.Field.of("bincol", Schema.of(Schema.Type.STRING)));
+
   private static String password;
   private static int port;
 
@@ -107,6 +113,13 @@ public class MySqlEventReaderIntegrationTest {
         statement.execute(
           String.format("CREATE TABLE %s (id int PRIMARY KEY, name varchar(50) not null, bday date null)",
                         CUSTOMERS_TABLE));
+      }
+
+      // create table with Binary col
+      try (Statement statement = connection.createStatement()) {
+        statement.execute(
+          String.format("CREATE TABLE %s (id int PRIMARY KEY, bincol BINARY(16) not null)",
+                        BINARYCOL_TABLE));
       }
 
       // insert sample data
@@ -239,4 +252,30 @@ public class MySqlEventReaderIntegrationTest {
     eventReader.stop();
     Assert.assertFalse(eventReader.failedToStop());
   }
-}
+
+    @Test
+    public void testBinaryHandlingModebyDebezium() throws InterruptedException {
+      //https://debezium.io/documentation/reference/stable/connectors/mysql.html#mysql-property-binary-handling-mode
+      SourceTable sourceTable = new SourceTable(DB, BINARYCOL_TABLE, null,
+                                                Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
+
+      MockContext context = new MockContext(Driver.class);
+      context.addRuntimeArgument(MySqlEventReader.SOURCE_CONNECTOR_PREFIX +  "binary.handling.mode" , "HEX");
+
+      MockEventEmitter eventEmitter = new MockEventEmitter(4);
+      MySqlConfig config = new MySqlConfig("localhost", port, "root", password, 13, DB,
+                                           TimeZone.getDefault().getID());
+
+      MySqlEventReader eventReader = new MySqlEventReader(Collections.singleton(sourceTable), config,
+                                                          context, eventEmitter);
+      eventReader.start(new Offset());
+
+      eventEmitter.waitForExpectedEvents(30, TimeUnit.SECONDS);
+
+      DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(3);
+      Assert.assertEquals(DDLOperation.Type.CREATE_TABLE, ddlEvent.getOperation().getType());
+      Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
+      Assert.assertEquals(BINARYCOL_TABLE, ddlEvent.getOperation().getTableName());
+      Assert.assertEquals(EXPECTED_BINARYCOL_SCHEMA, ddlEvent.getSchema());
+    }
+  }
