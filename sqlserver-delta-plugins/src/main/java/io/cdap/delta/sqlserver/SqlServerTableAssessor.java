@@ -41,7 +41,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
   static final String TYPE_NAME = "TYPE_NAME";
   private static final String GEOMETRY = "GEOMETRY";
   private static final String GEOGRAPHY = "GEOGRAPHY";
-  private static final String DATETIME2 = "DATETIME2";
+  static final String DATETIME2 = "DATETIME2";
   public static final int MAX_SUPPORTED_SCALE = 6;
   public static final int MILLIS_SCALE = 3;
 
