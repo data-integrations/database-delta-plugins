@@ -36,9 +36,11 @@ import javax.annotation.Nullable;
 public class MockContext implements DeltaSourceContext {
   private final Class<?> driverClass;
   private final Map<String, byte[]> state = new HashMap<>();
+  private Map<String, String> runtimeArguments;
 
   public MockContext(Class<?> driverClass) {
     this.driverClass = driverClass;
+    this.runtimeArguments = new HashMap<>();
   }
 
   @Override
@@ -88,7 +90,7 @@ public class MockContext implements DeltaSourceContext {
 
   @Override
   public Map<String, String> getRuntimeArguments() {
-    return new HashMap<>();
+    return this.runtimeArguments;
   }
 
   @Override
@@ -150,5 +152,9 @@ public class MockContext implements DeltaSourceContext {
   @Override
   public void notifyFailed(Throwable throwable) {
     // no-op
+  }
+
+  public void addRuntimeArgument(String key, String value) {
+    this.runtimeArguments.put(key, value);
   }
 }
