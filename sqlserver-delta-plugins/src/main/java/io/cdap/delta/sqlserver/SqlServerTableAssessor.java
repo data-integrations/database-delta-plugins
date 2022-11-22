@@ -42,6 +42,8 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
   private static final String GEOMETRY = "GEOMETRY";
   private static final String GEOGRAPHY = "GEOGRAPHY";
   private static final String DATETIME2 = "DATETIME2";
+  public static final int MAX_SUPPORTED_SCALE = 6;
+  public static final int MILLIS_SCALE = 3;
 
   @Override
   public TableAssessment assess(TableDetail tableDetail) {
@@ -102,19 +104,27 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
         schema = Schema.of(Schema.LogicalType.DATE);
         break;
       case Types.TIME:
-        support = ColumnSupport.PARTIAL;
-        suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
-                                          Collections.emptyList());
-        schema = Schema.of(Schema.LogicalType.TIME_MICROS);
-        break;
-      case Types.TIMESTAMP:
-        if (DATETIME2.equals(upperCaseTypeName)) {
+        scale = Integer.parseInt(properties.get(SCALE));
+        if (scale > MAX_SUPPORTED_SCALE) {
           support = ColumnSupport.PARTIAL;
           suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
                                             Collections.emptyList());
-          schema = Schema.of(Schema.LogicalType.TIMESTAMP_MICROS);
+        }
+        if (scale <= MILLIS_SCALE) {
+          schema = Schema.of(Schema.LogicalType.TIME_MILLIS);
         } else {
-          schema = Schema.of(Schema.LogicalType.TIMESTAMP_MILLIS);
+          schema = Schema.of(Schema.LogicalType.TIME_MICROS);
+        }
+        break;
+      case Types.TIMESTAMP:
+        schema = Schema.of(Schema.LogicalType.DATETIME);
+        if (DATETIME2.equals(upperCaseTypeName)) {
+          scale = Integer.parseInt(properties.get(SCALE));
+          if (scale > MAX_SUPPORTED_SCALE) {
+            support = ColumnSupport.PARTIAL;
+            suggestion = new ColumnSuggestion("The precision will be reduced to microseconds from nanoseconds",
+                                              Collections.emptyList());
+          }
         }
         break;
 
@@ -150,11 +160,11 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
     }
 
     Schema.Field field = schema == null ? null :
-                           Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
+      Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
     ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), detail.getType().getName())
-                                    .setSupport(support)
-                                    .setSuggestion(suggestion)
-                                    .build();
+      .setSupport(support)
+      .setSuggestion(suggestion)
+      .build();
     return new ColumnEvaluation(field, assessment);
   }
 }
