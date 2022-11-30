@@ -16,6 +16,7 @@
 package io.cdap.delta.sqlserver;
 
 import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.delta.api.assessment.ColumnAssessment;
 import io.cdap.delta.api.assessment.ColumnDetail;
 import io.cdap.delta.api.assessment.ColumnSupport;
 import io.cdap.delta.api.assessment.TableAssessment;
@@ -56,10 +57,12 @@ public class SqlServerTableAssessorTest {
     ColumnEvaluation columnEvaluation = SqlServerTableAssessor.evaluateColumn(columnDetail);
     TableAssessment assessment = tableAssessor.assess(tableDetail);
 
+    Assert.assertEquals(1, assessment.getColumns().size());
+    ColumnAssessment columnAssessment = assessment.getColumns().get(0);
+    Assert.assertEquals(SqlServerTableAssessor.DATETIME2, columnAssessment.getType());
+    Assert.assertEquals(ColumnSupport.PARTIAL, columnAssessment.getSupport());
     Assert.assertEquals(Schema.LogicalType.DATETIME,
                         columnEvaluation.getField().getSchema().getNonNullable().getLogicalType());
-    Assert.assertEquals(1, assessment.getColumns().size());
-    Assert.assertEquals(ColumnSupport.PARTIAL, assessment.getColumns().get(0).getSupport());
   }
 
   @Test
@@ -94,7 +97,9 @@ public class SqlServerTableAssessorTest {
     Assert.assertEquals(Schema.LogicalType.DATETIME,
                         columnEvaluation.getField().getSchema().getNonNullable().getLogicalType());
     Assert.assertEquals(1, assessment.getColumns().size());
-    Assert.assertEquals(ColumnSupport.YES, assessment.getColumns().get(0).getSupport());
+    ColumnAssessment columnAssessment = assessment.getColumns().get(0);
+    Assert.assertEquals(DATETIME, columnAssessment.getType());
+    Assert.assertEquals(ColumnSupport.YES, columnAssessment.getSupport());
   }
 
   @Test

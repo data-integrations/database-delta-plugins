@@ -59,6 +59,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
   static ColumnEvaluation evaluateColumn(ColumnDetail detail) throws IllegalArgumentException {
     Schema schema;
     int sqlType = detail.getType().getVendorTypeNumber();
+    String sqlTypeName = detail.getType().getName();
     Map<String, String> properties = detail.getProperties();
     String upperCaseTypeName = properties.get(TYPE_NAME).toUpperCase();
     ColumnSupport support = ColumnSupport.YES;
@@ -118,6 +119,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
         break;
       case Types.TIMESTAMP:
         schema = Schema.of(Schema.LogicalType.DATETIME);
+        sqlTypeName = upperCaseTypeName;
         if (DATETIME2.equals(upperCaseTypeName)) {
           scale = Integer.parseInt(properties.get(SCALE));
           if (scale > MAX_SUPPORTED_SCALE) {
@@ -161,7 +163,7 @@ public class SqlServerTableAssessor implements TableAssessor<TableDetail> {
 
     Schema.Field field = schema == null ? null :
       Schema.Field.of(detail.getName(), detail.isNullable() ? Schema.nullableOf(schema) : schema);
-    ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), detail.getType().getName())
+    ColumnAssessment assessment = ColumnAssessment.builder(detail.getName(), sqlTypeName)
       .setSupport(support)
       .setSuggestion(suggestion)
       .build();
