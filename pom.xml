@@ -198,9 +198,6 @@
           <groupId>io.fabric8</groupId>
           <artifactId>docker-maven-plugin</artifactId>
           <version>0.33.0</version>
-          <configuration>
-            <skip>${skipITs}</skip>
-          </configuration>
           <executions>
             <execution>
               <id>start</id>
@@ -341,6 +338,18 @@
   </build>
 
   <profiles>
+    <profile>
+      <id>skip-its</id>
+      <activation>
+        <property>
+          <name>skipITs</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <properties>
+        <docker.skip>true</docker.skip>
+      </properties>
+    </profile>
     <profile>
       <id>release</id>
       <build>
