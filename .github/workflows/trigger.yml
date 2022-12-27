@@ -26,7 +26,7 @@ on:
 
 jobs:
   trigger:
-    runs-on: ubuntu-latest
+    runs-on: cdapio-hub-k8-runner
 
     # We allow builds:
     # 1) When triggered manually
@@ -43,5 +43,7 @@ jobs:
          )
 
     steps:
+      - name: Check docker
+        run: docker ps
       - name: Trigger build
         run: echo Maven build will be triggered now
