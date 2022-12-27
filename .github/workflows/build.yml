@@ -43,8 +43,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-${{ github.workflow }}
 
+      - name: Check docker
+          run: which docker && docker ps
+
       - name: Build with Maven
-        run: mvn clean compile test -fae -T 2 -B -V -DcloudBuild -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.wagon.httpconnectionManager.ttlSeconds=25
+        run: mvn clean verify -fae -T 2 -B -V -DcloudBuild -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.wagon
+        .httpconnectionManager.ttlSeconds=25
 
       - name: Archive build artifacts
         uses: actions/upload-artifact@v3
