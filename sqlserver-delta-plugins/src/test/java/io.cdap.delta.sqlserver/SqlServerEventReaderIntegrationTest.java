@@ -30,6 +30,7 @@ import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.mock.BlockingEventEmitter;
 import io.cdap.delta.plugin.mock.MockContext;
 import io.cdap.delta.plugin.mock.MockEventEmitter;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -41,6 +42,7 @@ import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -56,15 +58,18 @@ import java.util.concurrent.TimeUnit;
  * are some classloading issues due to copied debezium classes.
  */
 public class SqlServerEventReaderIntegrationTest {
-  private static final String DB = "test";
+  private static final String DB = "test6";
   private static final String CUSTOMERS_TABLE = "customers";
   private static final Schema CUSTOMERS_SCHEMA = Schema.recordOf(
     "customers",
     Schema.Field.of("id", Schema.of(Schema.Type.INT)),
     Schema.Field.of("name", Schema.of(Schema.Type.STRING)),
     Schema.Field.of("bday", Schema.nullableOf(Schema.of(Schema.LogicalType.DATE))));
+  private static final String HOST = "localhost";
+  private static final String USER = "sa";
   private static String password;
   private static int port;
+  private static String connectionUrl;
 
   @BeforeClass
   public static void setupClass() throws Exception {
@@ -76,7 +81,7 @@ public class SqlServerEventReaderIntegrationTest {
     }
     port = Integer.parseInt(properties.getProperty("sqlserver.port"));
 
-    String connectionUrl = String.format("jdbc:sqlserver://localhost:%d;user=sa;password=%s", port, password);
+    connectionUrl = String.format("jdbc:sqlserver://%s:%d;user=%s;password=%s", HOST, port, USER , password);
     DriverManager.getDriver(connectionUrl);
 
 
@@ -98,8 +103,8 @@ public class SqlServerEventReaderIntegrationTest {
       }
     }
 
-    connectionUrl = connectionUrl + ";databaseName=" + DB;
-    try (Connection connection = DriverManager.getConnection(connectionUrl)) {
+    String connectionUrlForDB = connectionUrl + ";databaseName=" + DB;
+    try (Connection connection = DriverManager.getConnection(connectionUrlForDB)) {
       // create table
       try (Statement statement = connection.createStatement()) {
         statement.execute(String.format("CREATE TABLE %s (id int PRIMARY KEY, name varchar(50) not null, bday date)",
@@ -140,14 +145,24 @@ public class SqlServerEventReaderIntegrationTest {
     }
   }
 
+  @AfterClass
+  public static void tearDown() throws SQLException {
+    // drop database
+    try (Connection connection = DriverManager.getConnection(connectionUrl)) {
+      try (Statement statement = connection.createStatement()) {
+        statement.execute("DROP DATABASE " + DB);
+      }
+    }
+  }
+
   @Test
   public void test() throws InterruptedException {
     SourceTable sourceTable = new SourceTable(DB, CUSTOMERS_TABLE, "dbo",
                                               Collections.emptySet(), Collections.emptySet(), Collections.emptySet());
 
     DeltaSourceContext context = new MockContext(SQLServerDriver.class);
-    MockEventEmitter eventEmitter = new MockEventEmitter(5);
-    SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
+    MockEventEmitter eventEmitter = new MockEventEmitter(6);
+    SqlServerConfig config = new SqlServerConfig(HOST, port, USER, password,
                                                  DB, null, "mssql");
 
     SqlServerEventReader eventReader = new SqlServerEventReader(Collections.singleton(sourceTable), config,
@@ -155,62 +170,71 @@ public class SqlServerEventReaderIntegrationTest {
 
     eventReader.start(new Offset());
 
-    eventEmitter.waitForExpectedEvents(30, TimeUnit.SECONDS);
+    try {
+      eventEmitter.waitForExpectedEvents(30, TimeUnit.SECONDS);
 
-    Assert.assertEquals(3, eventEmitter.getDdlEvents().size());
-    Assert.assertEquals(2, eventEmitter.getDmlEvents().size());
+      Assert.assertEquals(3, eventEmitter.getDdlEvents().size());
+      Assert.assertEquals(3, eventEmitter.getDmlEvents().size());
 
-    DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
-    Assert.assertEquals(DDLOperation.Type.DROP_TABLE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
-    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
+      DDLEvent ddlEvent = eventEmitter.getDdlEvents().get(0);
+      Assert.assertEquals(DDLOperation.Type.DROP_TABLE, ddlEvent.getOperation().getType());
+      Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
+      Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
 
-    ddlEvent = eventEmitter.getDdlEvents().get(1);
-    Assert.assertEquals(DDLOperation.Type.CREATE_DATABASE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
+      ddlEvent = eventEmitter.getDdlEvents().get(1);
+      Assert.assertEquals(DDLOperation.Type.CREATE_DATABASE, ddlEvent.getOperation().getType());
+      Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
 
-    ddlEvent = eventEmitter.getDdlEvents().get(2);
-    Assert.assertEquals(DDLOperation.Type.CREATE_TABLE, ddlEvent.getOperation().getType());
-    Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
-    Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
-    Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
-    Assert.assertEquals(CUSTOMERS_SCHEMA, ddlEvent.getSchema());
+      ddlEvent = eventEmitter.getDdlEvents().get(2);
+      Assert.assertEquals(DDLOperation.Type.CREATE_TABLE, ddlEvent.getOperation().getType());
+      Assert.assertEquals(DB, ddlEvent.getOperation().getDatabaseName());
+      Assert.assertEquals(CUSTOMERS_TABLE, ddlEvent.getOperation().getTableName());
+      Assert.assertEquals(Collections.singletonList("id"), ddlEvent.getPrimaryKey());
 
-    DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
-    Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
-    Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
-    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
-    StructuredRecord row = dmlEvent.getRow();
-    StructuredRecord expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
-      .set("id", 0)
-      .set("name", "alice")
-      .setDate("bday", LocalDate.ofEpochDay(0))
-      .build();
-    Assert.assertEquals(expected, row);
+      // Take schema name from the row as it is generated by debezium
+      // so it can be different from the one in our schema but does not impact data
+      Schema expectedSchema = Schema.recordOf(ddlEvent.getSchema().getRecordName(), CUSTOMERS_SCHEMA.getFields());
+      Assert.assertEquals(expectedSchema, ddlEvent.getSchema());
 
-    dmlEvent = eventEmitter.getDmlEvents().get(1);
-    Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
-    Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
-    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
-    row = dmlEvent.getRow();
-    expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
-      .set("id", 1)
-      .set("name", "bob")
-      .setDate("bday", LocalDate.ofEpochDay(365))
-      .build();
-    Assert.assertEquals(expected, row);
+      DMLEvent dmlEvent = eventEmitter.getDmlEvents().get(0);
+      Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
+      Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
+      Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
 
-    dmlEvent = eventEmitter.getDmlEvents().get(2);
-    Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
-    Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
-    Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
-    row = dmlEvent.getRow();
-    expected = StructuredRecord.builder(CUSTOMERS_SCHEMA)
-      .set("id", 2)
-      .set("name", "tim")
-      .setDate("bday", null)
-      .build();
-    Assert.assertEquals(expected, row);
+      StructuredRecord row = dmlEvent.getRow();
+      StructuredRecord expected = StructuredRecord.builder(expectedSchema)
+        .set("id", 0)
+        .set("name", "alice")
+        .setDate("bday", LocalDate.ofEpochDay(0))
+        .build();
+      Assert.assertEquals(expected, row);
+
+      dmlEvent = eventEmitter.getDmlEvents().get(1);
+      Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
+      Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
+      Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
+      row = dmlEvent.getRow();
+      expected = StructuredRecord.builder(expectedSchema)
+        .set("id", 1)
+        .set("name", "bob")
+        .setDate("bday", LocalDate.ofEpochDay(365))
+        .build();
+      Assert.assertEquals(expected, row);
+
+      dmlEvent = eventEmitter.getDmlEvents().get(2);
+      Assert.assertEquals(DMLOperation.Type.INSERT, dmlEvent.getOperation().getType());
+      Assert.assertEquals(DB, dmlEvent.getOperation().getDatabaseName());
+      Assert.assertEquals(CUSTOMERS_TABLE, dmlEvent.getOperation().getTableName());
+      row = dmlEvent.getRow();
+      expected = StructuredRecord.builder(expectedSchema)
+        .set("id", 2)
+        .set("name", "tim")
+        .setDate("bday", null)
+        .build();
+      Assert.assertEquals(expected, row);
+    } finally {
+      eventReader.stop();
+    }
   }
 
   @Test
@@ -222,7 +246,7 @@ public class SqlServerEventReaderIntegrationTest {
     BlockingQueue<DDLEvent> ddlEvents = new ArrayBlockingQueue<>(1);
     BlockingQueue<DMLEvent> dmlEvents = new ArrayBlockingQueue<>(1);
     EventEmitter eventEmitter = new BlockingEventEmitter(ddlEvents, dmlEvents);
-    SqlServerConfig config = new SqlServerConfig("localhost", port, "sa", password,
+    SqlServerConfig config = new SqlServerConfig(HOST, port, USER, password,
                                                  DB, null, "mssql");
 
     SqlServerEventReader eventReader = new SqlServerEventReader(Collections.singleton(sourceTable), config,
@@ -230,17 +254,19 @@ public class SqlServerEventReaderIntegrationTest {
 
     eventReader.start(new Offset());
 
-    int count = 0;
-    while (ddlEvents.size() < 1 && count < 100) {
-      TimeUnit.MILLISECONDS.sleep(50);
-      count++;
-    }
+    try {
+      int count = 0;
+      while (ddlEvents.size() < 1 && count < 100) {
+        TimeUnit.MILLISECONDS.sleep(100);
+        count++;
+      }
 
-    if (count >= 100) {
-      Assert.fail("Reader never emitted any events.");
+      if (count >= 100) {
+        Assert.fail("Reader never emitted any events.");
+      }
+    } finally {
+      eventReader.stop();
     }
-
-    eventReader.stop();
     Assert.assertFalse(eventReader.failedToStop());
   }
 }
