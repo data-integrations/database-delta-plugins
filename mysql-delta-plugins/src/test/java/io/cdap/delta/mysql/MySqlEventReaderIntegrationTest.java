@@ -80,6 +80,7 @@ public class MySqlEventReaderIntegrationTest {
   private static Properties connProperties;
   private static String connectionUrl;
 
+
   @BeforeClass
   public static void setupClass() throws Exception {
     password = System.getProperty("mysql.root.password");
