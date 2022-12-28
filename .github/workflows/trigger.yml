@@ -26,7 +26,7 @@ on:
 
 jobs:
   trigger:
-    runs-on: cdapio-hub-k8-runner
+    runs-on: ubuntu-latest
 
     # We allow builds:
     # 1) When triggered manually
@@ -43,7 +43,13 @@ jobs:
          )
 
     steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.workflow_dispatch.ref }}
       - name: Check docker
         run: docker ps
+      - name: Build with Maven
+        run: mvn clean verify -fae -T 2 -B -V -DcloudBuild -Dmaven.wagon.http.retryHandler.count=3
+          -Dmaven.wagon.httpconnectionManager.ttlSeconds=25
       - name: Trigger build
         run: echo Maven build will be triggered now
