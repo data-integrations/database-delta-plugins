@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  */
 public class MySqlEventReader implements EventReader {
   public static final Logger LOG = LoggerFactory.getLogger(MySqlEventReader.class);
-  private static final String SOURCE_CONNECTOR_PREFIX = "source.connector.";
+  protected static final String SOURCE_CONNECTOR_PREFIX = "source.connector.";
   private final MySqlConfig config;
   private final EventEmitter emitter;
   private final ExecutorService executorService;
@@ -200,7 +200,7 @@ public class MySqlEventReader implements EventReader {
 
     boolean timeAdjusterEnabled = configuration.getConfig().getBoolean(MySqlConnectorConfig.ENABLE_TIME_ADJUSTER);
     return new MySqlValueConverters(decimalMode, timePrecisionMode, bigIntUnsignedMode,
-                                    CommonConnectorConfig.BinaryHandlingMode.BYTES,
+                                    configuration.binaryHandlingMode(),
                                     timeAdjusterEnabled ? MySqlEventReader::adjustTemporal : x -> x,
                                     (message, exception) -> {
       throw new DebeziumException(message, exception);
