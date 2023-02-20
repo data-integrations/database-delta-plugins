@@ -22,6 +22,7 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.EventReader;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
+import io.cdap.delta.api.StopContext;
 import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
 import io.cdap.delta.plugin.common.RuntimeArguments;
@@ -176,7 +177,10 @@ public class SqlServerEventReader implements EventReader {
   }
 
   @Override
-  public void stop() throws InterruptedException {
+  public void stop(StopContext stopContext) throws InterruptedException {
+    LOG.info("Stopping debezium engine, reason: " + stopContext.getOrigin());
+    // Debezium engine is implicitly stopped as part of this call
+    // Refer EmbeddedEngine docs
     executorService.shutdownNow();
     if (!executorService.awaitTermination(2, TimeUnit.MINUTES)) {
       failedStopping = true;
