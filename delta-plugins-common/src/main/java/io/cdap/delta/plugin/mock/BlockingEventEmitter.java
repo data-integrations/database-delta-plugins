@@ -39,12 +39,14 @@ public class BlockingEventEmitter implements EventEmitter {
   }
 
   @Override
-  public void emit(DDLEvent ddlEvent) throws InterruptedException {
+  public boolean emit(DDLEvent ddlEvent) throws InterruptedException {
     ddlQueue.put(ddlEvent);
+    return true;
   }
 
   @Override
-  public void emit(DMLEvent dmlEvent) throws InterruptedException {
+  public boolean emit(DMLEvent dmlEvent) throws InterruptedException {
     dmlQueue.put(dmlEvent);
+    return true;
   }
 }

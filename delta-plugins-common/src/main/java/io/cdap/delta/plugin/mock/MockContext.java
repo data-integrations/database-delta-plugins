@@ -19,6 +19,8 @@ package io.cdap.delta.plugin.mock;
 import io.cdap.cdap.api.macro.MacroEvaluator;
 import io.cdap.cdap.api.metrics.Metrics;
 import io.cdap.cdap.api.plugin.PluginProperties;
+import io.cdap.delta.api.DDLOperation;
+import io.cdap.delta.api.DMLOperation;
 import io.cdap.delta.api.DeltaPipelineId;
 import io.cdap.delta.api.DeltaSourceContext;
 import io.cdap.delta.api.ReplicationError;
@@ -51,6 +53,16 @@ public class MockContext implements DeltaSourceContext {
   @Override
   public void setOK() {
     // no-op
+  }
+
+  @Override
+  public void incrementPublishCount(DMLOperation op) {
+
+  }
+
+  @Override
+  public void incrementPublishCount(DDLOperation op) {
+
   }
 
   @Override

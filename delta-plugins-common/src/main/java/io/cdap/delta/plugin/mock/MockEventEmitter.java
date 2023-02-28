@@ -40,15 +40,17 @@ public class MockEventEmitter implements EventEmitter {
   }
 
   @Override
-  public void emit(DDLEvent ddlEvent) {
+  public boolean emit(DDLEvent ddlEvent) {
     ddlEvents.add(ddlEvent);
     latch.countDown();
+    return true;
   }
 
   @Override
-  public void emit(DMLEvent dmlEvent) {
+  public boolean emit(DMLEvent dmlEvent) {
     dmlEvents.add(dmlEvent);
     latch.countDown();
+    return true;
   }
 
   public List<DDLEvent> getDdlEvents() {
