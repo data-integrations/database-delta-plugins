@@ -49,6 +49,7 @@ import java.util.function.Consumer;
  */
 public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private static final Logger LOG = LoggerFactory.getLogger(MySqlRecordConsumer.class);
+  public static final String TRX_ID_SEP = ":";
 
   private final DeltaSourceContext context;
   private final EventEmitter emitter;
@@ -184,9 +185,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     String transactionId = source.get("gtid");
     if (transactionId == null) {
       // this is not really a transaction id, but we don't get an event when a transaction started/ended
-      transactionId = String.format("%s:%d",
-                                    source.get(MySqlConstantOffsetBackingStore.FILE),
-                                    source.get(MySqlConstantOffsetBackingStore.POS));
+      transactionId = source.get(MySqlConstantOffsetBackingStore.FILE) + TRX_ID_SEP +
+                                    source.get(MySqlConstantOffsetBackingStore.POS);
     }
 
     StructuredRecord before = val.get("before");
