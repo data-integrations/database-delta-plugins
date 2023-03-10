@@ -16,6 +16,7 @@
 
 package io.cdap.delta.plugin.common;
 
+import com.google.common.collect.MapMaker;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.format.UnexpectedFormatException;
 import io.cdap.cdap.api.data.schema.Schema;
@@ -35,6 +36,8 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -45,6 +48,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,8 +59,13 @@ import java.util.stream.Collectors;
  * Utilities for converting Records and Schemas.
  */
 public class Records {
+  private static final Logger LOG = LoggerFactory.getLogger(Records.class);
+
   private static final String PRECISION_NAME = "connect.decimal.precision";
   private static final String SCALE_NAME = "scale";
+
+  private static final Map<org.apache.kafka.connect.data.Schema, Schema> schemaCache = new MapMaker()
+    .weakKeys().makeMap();
 
   private Records() {
     // no-op
@@ -143,6 +152,18 @@ public class Records {
     return builder.build();
   }
 
+  public static StructuredRecord convert(Struct struct, boolean useCache) {
+    org.apache.kafka.connect.data.Schema schema = struct.schema();
+    if(!schemaCache.containsKey(schema)){
+      LOG.info("Schema cache miss ");
+      Schema mappedSchema = convert(struct.schema());
+      schemaCache.put(schema, mappedSchema);
+    } else {
+//      LOG.info("Reusing cached schema ");
+    }
+    return getStructuredRecord(struct, schemaCache.get(schema));
+  }
+
   /**
    * Convert a Debezium row, represented as a Kafka Connect Struct, into a CDAP StructuredRecord.
    *
@@ -153,6 +174,10 @@ public class Records {
     Schema schema = convert(struct.schema());
     schema = schema.isNullable() ? schema.getNonNullable() : schema;
 
+    return getStructuredRecord(struct, schema);
+  }
+
+  private static StructuredRecord getStructuredRecord(Struct struct, Schema schema) {
     StructuredRecord.Builder builder = StructuredRecord.builder(schema);
     if (schema.getFields() == null) {
       return builder.build();

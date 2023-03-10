@@ -33,6 +33,7 @@ import io.debezium.relational.TableId;
 import io.debezium.relational.Tables;
 import io.debezium.relational.ddl.DdlParser;
 import io.debezium.relational.ddl.DdlParserListener;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
@@ -124,7 +125,12 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
 
-    StructuredRecord val = Records.convert((Struct) sourceRecord.value());
+    Struct value = (Struct) sourceRecord.value();
+
+//    Schema schema = value.schema();
+//    LOG.info("Schema object {} {}", System.identityHashCode(schema), schema.fields());
+
+    StructuredRecord val = Records.convert(value, true);
     String ddl = val.get("ddl");
     StructuredRecord source = val.get("source");
     if (source == null) {
