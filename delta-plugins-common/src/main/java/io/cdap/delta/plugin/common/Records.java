@@ -154,9 +154,10 @@ public class Records {
 
   public static StructuredRecord convert(Struct struct, boolean useCache) {
     org.apache.kafka.connect.data.Schema schema = struct.schema();
-    if(!schemaCache.containsKey(schema)){
+    if (!schemaCache.containsKey(schema)) {
       LOG.info("Schema cache miss ");
       Schema mappedSchema = convert(struct.schema());
+      mappedSchema = mappedSchema.isNullable() ? mappedSchema.getNonNullable() : mappedSchema;
       schemaCache.put(schema, mappedSchema);
     } else {
 //      LOG.info("Reusing cached schema ");
@@ -308,7 +309,7 @@ public class Records {
             mapKey -> convert(schema.keySchema(), mapKey),
             mapVal -> convert(schema.valueSchema(), mapVal)));
       case STRUCT:
-        return convert((Struct) val);
+        return convert((Struct) val, true);
     }
     // should never happen, all values are listed above
     throw new IllegalStateException(String.format("Kafka type '%s' is not supported.", schema.type()));
