@@ -28,6 +28,8 @@ import io.cdap.delta.api.assessment.TableAssessor;
 import io.cdap.delta.api.assessment.TableDetail;
 import io.cdap.delta.plugin.common.ColumnEvaluation;
 import io.cdap.delta.plugin.common.DriverCleanup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -44,6 +46,7 @@ import java.util.Map;
  * MySQL table assessor.
  */
 public class MySqlTableAssessor implements TableAssessor<TableDetail> {
+  private static final Logger LOG = LoggerFactory.getLogger(MySqlTableAssessor.class);
   static final String COLUMN_LENGTH = "COLUMN_LENGTH";
   static final String SCALE = "SCALE";
 
@@ -197,6 +200,7 @@ public class MySqlTableAssessor implements TableAssessor<TableDetail> {
         }
       }
     } catch (Exception e) {
+      LOG.error("Error in checking permissions", e);
       featureProblems.add(permissionUnknownProblem);
     }
   }

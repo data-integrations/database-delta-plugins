@@ -56,12 +56,13 @@ public class DriverCleanup implements Closeable {
       DriverManager.getDriver(url);
       return new DriverCleanup(null);
     } catch (SQLException e) {
+      LOG.warn("Error while getting JDBC Driver from URL {}", url, e);
       Driver driver = classz.newInstance();
       JDBCDriverShim shim = new JDBCDriverShim(driver);
       try {
         deregisterAllDrivers(classz);
       } catch (NoSuchFieldException | ClassNotFoundException e1) {
-        LOG.warn("Unable to deregister JDBC Driver class {}", classz);
+        LOG.warn("Unable to deregister JDBC Driver class {} {}", classz, e1.getMessage());
       }
       DriverManager.registerDriver(shim);
       return new DriverCleanup(shim);

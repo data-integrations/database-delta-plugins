@@ -134,12 +134,12 @@ public class SqlServerTableRegistry implements TableRegistry {
           }
         }
       } catch (Exception e) {
+        String msg = String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
+                                      schema == null ? table : schema + "." + table, db);
+        LOGGER.error(msg, e);
         missingFeatures.add(
-          new Problem("Unable To Check If CDC Was Enabled",
-                      String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
-                                    schema == null ? table : schema + "." + table, db),
-                      "Check database connectivity and table information",
-                      null));
+          new Problem("Unable To Check If CDC Was Enabled", msg,
+                      "Check database connectivity and table information", null));
       }
       return builder.setFeatures(missingFeatures).build();
     } catch (SQLException e) {
