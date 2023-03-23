@@ -52,7 +52,7 @@ import javax.annotation.Nullable;
  * Sql Server table registry
  */
 public class SqlServerTableRegistry implements TableRegistry {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SqlServerTableRegistry.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SqlServerTableRegistry.class);
   private final String jdbcUrl;
   private final SqlServerConfig config;
   private final DriverCleanup driverCleanup;
@@ -134,12 +134,12 @@ public class SqlServerTableRegistry implements TableRegistry {
           }
         }
       } catch (Exception e) {
+        String msg = String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
+                                      schema == null ? table : schema + "." + table, db);
+        LOG.error(msg, e);
         missingFeatures.add(
-          new Problem("Unable To Check If CDC Was Enabled",
-                      String.format("Unable to check if CDC feature for table '%s' in database '%s' was enabled or not",
-                                    schema == null ? table : schema + "." + table, db),
-                      "Check database connectivity and table information",
-                      null));
+          new Problem("Unable To Check If CDC Was Enabled", msg,
+                      "Check database connectivity and table information", null));
       }
       return builder.setFeatures(missingFeatures).build();
     } catch (SQLException e) {
@@ -192,11 +192,11 @@ public class SqlServerTableRegistry implements TableRegistry {
       return Optional.empty();
     }
     List<String> primaryKey = new ArrayList<>();
-    LOGGER.debug("Query primary key for {}.{}.{}", db, schema, table);
+    LOG.debug("Query primary key for {}.{}.{}", db, schema, table);
     try (ResultSet keyResults = dbMeta.getPrimaryKeys(db, schema, table)) {
       while (keyResults.next()) {
         String pk = keyResults.getString("COLUMN_NAME");
-        LOGGER.debug("Found primary key for {}.{}.{} : {}", db, schema, table, pk);
+        LOG.debug("Found primary key for {}.{}.{} : {}", db, schema, table, pk);
         primaryKey.add(pk);
       }
     }
