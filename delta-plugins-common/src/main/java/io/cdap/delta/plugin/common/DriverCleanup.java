@@ -62,7 +62,7 @@ public class DriverCleanup implements Closeable {
       try {
         deregisterAllDrivers(classz);
       } catch (NoSuchFieldException | ClassNotFoundException e1) {
-        LOG.warn("Unable to deregister JDBC Driver class {} {}", classz, e1.getMessage());
+        LOG.warn("Unable to deregister JDBC Driver class {}", classz, e1);
       }
       DriverManager.registerDriver(shim);
       return new DriverCleanup(shim);
