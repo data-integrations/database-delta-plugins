@@ -35,6 +35,8 @@ import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -55,6 +57,8 @@ import java.util.stream.Collectors;
  * Utilities for converting Records and Schemas.
  */
 public class Records {
+  private static final Logger LOG = LoggerFactory.getLogger(Records.class);
+
   private static final String PRECISION_NAME = "connect.decimal.precision";
   private static final String SCALE_NAME = "scale";
 
@@ -149,10 +153,20 @@ public class Records {
    * @param struct
    * @return
    */
-  public static StructuredRecord convert(Struct struct) {
-    Schema schema = convert(struct.schema());
-    schema = schema.isNullable() ? schema.getNonNullable() : schema;
+  public static StructuredRecord convert(Struct struct, SchemaMappingCache schemaMappingCache) {
+    org.apache.kafka.connect.data.Schema schema = struct.schema();
+    Schema mappedSchema = schemaMappingCache.get(schema);
+    if (mappedSchema == null) {
+      LOG.info("Creating CDAP schema from source schema");
+      mappedSchema = convert(struct.schema());
+      mappedSchema = mappedSchema.isNullable() ? mappedSchema.getNonNullable() : mappedSchema;
+      schemaMappingCache.put(schema, mappedSchema);
+    }
+    return getStructuredRecord(struct, mappedSchema, schemaMappingCache);
+  }
 
+  private static StructuredRecord getStructuredRecord(Struct struct, Schema schema,
+                                                      SchemaMappingCache schemaMappingCache) {
     StructuredRecord.Builder builder = StructuredRecord.builder(schema);
     if (schema.getFields() == null) {
       return builder.build();
@@ -162,7 +176,7 @@ public class Records {
       String fieldName = field.getName();
       Field debeziumField = struct.schema().field(fieldName);
       String debeziumSchemaName = debeziumField.schema().name();
-      Object val = convert(debeziumField.schema(), struct.get(fieldName));
+      Object val = convert(debeziumField.schema(), struct.get(fieldName), schemaMappingCache);
       Schema fieldSchema = field.getSchema();
       fieldSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullable() : fieldSchema;
       Schema.LogicalType logicalType = fieldSchema.getLogicalType();
@@ -257,7 +271,8 @@ public class Records {
   }
 
 
-  private static Object convert(org.apache.kafka.connect.data.Schema schema, Object val) {
+  private static Object convert(org.apache.kafka.connect.data.Schema schema, Object val,
+                                SchemaMappingCache schemaMappingCache) {
     if (val == null) {
       return null;
     }
@@ -275,15 +290,15 @@ public class Records {
         return ((Short) val).intValue();
       case ARRAY:
         return ((List<?>) val).stream()
-          .map(o -> convert(schema.valueSchema(), o))
+          .map(o -> convert(schema.valueSchema(), o, schemaMappingCache))
           .collect(Collectors.toList());
       case MAP:
         return ((Map<?, ?>) val).entrySet().stream()
           .collect(Collectors.toMap(
-            mapKey -> convert(schema.keySchema(), mapKey),
-            mapVal -> convert(schema.valueSchema(), mapVal)));
+            mapKey -> convert(schema.keySchema(), mapKey, schemaMappingCache),
+            mapVal -> convert(schema.valueSchema(), mapVal, schemaMappingCache)));
       case STRUCT:
-        return convert((Struct) val);
+        return convert((Struct) val, schemaMappingCache);
     }
     // should never happen, all values are listed above
     throw new IllegalStateException(String.format("Kafka type '%s' is not supported.", schema.type()));
