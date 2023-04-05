@@ -30,7 +30,7 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public class SchemaMappingCache {
 
-  private static final Map<org.apache.kafka.connect.data.Schema, Schema> cache = new MapMaker()
+  private final Map<org.apache.kafka.connect.data.Schema, Schema> cache = new MapMaker()
     .weakKeys().makeMap();
 
 

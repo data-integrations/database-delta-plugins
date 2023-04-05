@@ -157,7 +157,7 @@ public class Records {
     org.apache.kafka.connect.data.Schema schema = struct.schema();
     Schema mappedSchema = schemaMappingCache.get(schema);
     if (mappedSchema == null) {
-      LOG.info("Creating CDAP schema from source schema");
+      LOG.info("Creating CDAP schema from source DB schema");
       mappedSchema = convert(struct.schema());
       mappedSchema = mappedSchema.isNullable() ? mappedSchema.getNonNullable() : mappedSchema;
       schemaMappingCache.put(schema, mappedSchema);
