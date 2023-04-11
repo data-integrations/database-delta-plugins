@@ -44,7 +44,7 @@ public class RecordsTest {
     Struct struct = new Struct(dataSchema);
     Short val = 1;
     struct.put(fieldName, val);
-    StructuredRecord convert = Records.convert(struct);
+    StructuredRecord convert = Records.convert(struct, new SchemaMappingCache());
     io.cdap.cdap.api.data.schema.Schema.Field priority = convert.getSchema().getField(fieldName);
     Assert.assertNotNull(priority);
     Assert.assertEquals(priority.getSchema(), io.cdap.cdap.api.data.schema.Schema.of(
@@ -61,7 +61,7 @@ public class RecordsTest {
     Struct struct = new Struct(dataSchema);
     String val = "2011-12-03T10:15:30.030431+01:00";
     struct.put(fieldName, val);
-    StructuredRecord converted = Records.convert(struct);
+    StructuredRecord converted = Records.convert(struct, new SchemaMappingCache());
     Assert.assertEquals(Schema.of(Schema.LogicalType.TIMESTAMP_MICROS),
                         converted.getSchema().getField(fieldName).getSchema());
     Assert.assertEquals(converted.getTimestamp(fieldName),
