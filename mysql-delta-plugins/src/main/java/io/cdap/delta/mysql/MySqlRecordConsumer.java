@@ -26,6 +26,7 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
+import io.cdap.delta.plugin.common.SchemaMappingCache;
 import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.embedded.StopConnectorException;
 import io.debezium.relational.Table;
@@ -49,6 +50,7 @@ import java.util.function.Consumer;
  */
 public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private static final Logger LOG = LoggerFactory.getLogger(MySqlRecordConsumer.class);
+  private static final String TRX_ID_SEP = ":";
 
   private final DeltaSourceContext context;
   private final EventEmitter emitter;
@@ -57,6 +59,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final Tables tables;
   private final Map<String, SourceTable> sourceTableMap;
   private final boolean replicateExistingData;
+  private final SchemaMappingCache schemaMappingCache;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
                              DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
@@ -68,6 +71,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     this.tables = tables;
     this.sourceTableMap = sourceTableMap;
     this.replicateExistingData = replicateExistingData;
+    this.schemaMappingCache = new SchemaMappingCache();
   }
 
   @Override
@@ -123,7 +127,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     Map<String, String> deltaOffset = generateCdapOffsets(sourceRecord);
     Offset recordOffset = new Offset(deltaOffset);
 
-    StructuredRecord val = Records.convert((Struct) sourceRecord.value());
+    StructuredRecord val = Records.convert((Struct) sourceRecord.value(), schemaMappingCache);
     String ddl = val.get("ddl");
     StructuredRecord source = val.get("source");
     if (source == null) {
@@ -184,9 +188,8 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     String transactionId = source.get("gtid");
     if (transactionId == null) {
       // this is not really a transaction id, but we don't get an event when a transaction started/ended
-      transactionId = String.format("%s:%d",
-                                    source.get(MySqlConstantOffsetBackingStore.FILE),
-                                    source.get(MySqlConstantOffsetBackingStore.POS));
+      transactionId = source.get(MySqlConstantOffsetBackingStore.FILE) + TRX_ID_SEP +
+                                    source.get(MySqlConstantOffsetBackingStore.POS);
     }
 
     StructuredRecord before = val.get("before");
@@ -240,6 +243,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
         // CREATE_TABLE and TRUNCATE_TABLE.
         switch (event.type()) {
           case ALTER_TABLE:
+            schemaMappingCache.reset();
             DdlParserListener.TableAlteredEvent alteredEvent = (DdlParserListener.TableAlteredEvent) event;
             TableId tableId = alteredEvent.tableId();
             Table table = tables.forTable(tableId);

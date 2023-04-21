@@ -28,6 +28,7 @@ import io.cdap.delta.api.EventEmitter;
 import io.cdap.delta.api.Offset;
 import io.cdap.delta.api.SourceTable;
 import io.cdap.delta.plugin.common.Records;
+import io.cdap.delta.plugin.common.SchemaMappingCache;
 import io.debezium.embedded.StopConnectorException;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -57,6 +58,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
   private final Map<String, SourceTable> sourceTableMap;
   private final boolean replicateExistingData;
   private final Offset latestOffset;
+  private final SchemaMappingCache schemaMappingCache;
 
 
   SqlServerRecordConsumer(DeltaSourceContext context, EventEmitter emitter, String databaseName,
@@ -69,6 +71,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     this.sourceTableMap = sourceTableMap;
     this.latestOffset = latestOffset;
     this.replicateExistingData = replicateExistingData;
+    this.schemaMappingCache = new SchemaMappingCache();
   }
 
   @Override
@@ -93,7 +96,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
       return;
     }
 
-    StructuredRecord val = Records.convert((Struct) sourceRecord.value());
+    StructuredRecord val = Records.convert((Struct) sourceRecord.value(), schemaMappingCache);
     DMLOperation.Type op;
     String opStr = val.get("op");
     if ("c".equals(opStr) || "r".equals(opStr)) {
@@ -158,7 +161,7 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
         .setSnapshot(ddlRecordOffset.isSnapshot())
         .setOffset(ddlRecordOffset.getAsOffset());
 
-      StructuredRecord key = Records.convert((Struct) sourceRecord.key());
+      StructuredRecord key = Records.convert((Struct) sourceRecord.key(), schemaMappingCache);
       List<Schema.Field> fields = key.getSchema().getFields();
       List<String> primaryFields = new ArrayList<>();
       if (fields != null && !fields.isEmpty()) {
