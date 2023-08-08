@@ -22,7 +22,7 @@
 
   <groupId>io.cdap.delta</groupId>
   <artifactId>database-delta-plugins</artifactId>
-  <version>0.9.0-SNAPSHOT</version>
+  <version>0.9.1</version>
   <modules>
     <module>mysql-delta-plugins</module>
     <module>delta-plugins-common</module>
