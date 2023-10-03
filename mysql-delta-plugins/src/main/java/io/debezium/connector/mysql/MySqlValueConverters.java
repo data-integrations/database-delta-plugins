@@ -666,13 +666,13 @@ public class MySqlValueConverters extends JdbcValueConverters {
   }
 
   @Override
-  protected ByteBuffer toByteBuffer(Column column, byte[] data) {
+  protected byte[] normalizeBinaryData(Column column, byte[] data) {
     // DBZ-254 right-pad fixed-length binary column values with 0x00 (zero byte)
     if (column.jdbcType() == Types.BINARY && data.length < column.length()) {
       data = Arrays.copyOf(data, column.length());
     }
 
-    return super.toByteBuffer(column, data);
+    return super.normalizeBinaryData(column, data);
   }
 
   /**
