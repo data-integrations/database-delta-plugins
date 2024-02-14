@@ -88,6 +88,9 @@ public class SqlServerEventReader implements EventReader {
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
     String urlPattern = "jdbc:sqlserver://${" + JdbcConfiguration.HOSTNAME + "}:${" +
       JdbcConfiguration.PORT + "};databaseName=${" + JdbcConfiguration.DATABASE + "}";
+
+    // TODO: Need to update this line with the current implementation
+    // Refer TODO in SQLServerConnection.java
     SqlServerConnection.factory = JdbcConnection.patternBasedFactory(urlPattern,
                                                                      jdbcDriverClass.getName(),
                                                                      jdbcDriverClass.getClassLoader());

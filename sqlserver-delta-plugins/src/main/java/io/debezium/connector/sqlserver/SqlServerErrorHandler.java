@@ -5,6 +5,7 @@
  */
 package io.debezium.connector.sqlserver;
 
+import io.debezium.config.CommonConnectorConfig;
 import io.debezium.connector.base.ChangeEventQueue;
 import io.debezium.pipeline.ErrorHandler;
 
@@ -19,8 +20,8 @@ public class SqlServerErrorHandler extends ErrorHandler {
   // to load the SQLServerException class from the user uploaded jdbc jar rather than looking
   // into the debezium connector jar.
   public static ClassLoader driverClassLoader;
-  public SqlServerErrorHandler(String logicalName, ChangeEventQueue<?> queue) {
-    super(SqlServerConnector.class, logicalName, queue);
+  public SqlServerErrorHandler(CommonConnectorConfig connectorConfig, ChangeEventQueue<?> queue) {
+    super(SqlServerConnector.class, connectorConfig, queue);
   }
 
   @Override

@@ -62,7 +62,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
   private final SchemaMappingCache schemaMappingCache;
 
   public MySqlRecordConsumer(DeltaSourceContext context, EventEmitter emitter,
-                             DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
+      DdlParser ddlParser, MySqlValueConverters mySqlValueConverters,
                              Tables tables, Map<String, SourceTable> sourceTableMap, boolean replicateExistingData) {
     this.context = context;
     this.emitter = emitter;

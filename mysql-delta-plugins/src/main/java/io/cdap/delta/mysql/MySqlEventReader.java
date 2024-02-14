@@ -31,7 +31,7 @@ import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
-import io.debezium.connector.mysql.MySqlJdbcContext;
+import io.debezium.connector.mysql.legacy.MySqlJdbcContext;
 import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
 import io.debezium.embedded.EmbeddedEngine;
@@ -89,9 +89,6 @@ public class MySqlEventReader implements EventReader {
     // note that, this is a short-term hacky solution for us to solve the problem of excluding mysql-jdbc jar from MySql
     // delta plugin's dependencies in CDAP.
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
-    MySqlJdbcContext.connectionFactory = JdbcConnection.patternBasedFactory(MySqlJdbcContext.MYSQL_CONNECTION_URL,
-                                                                            jdbcDriverClass.getName(),
-                                                                            jdbcDriverClass.getClassLoader());
     MySqlValueConverters.jdbcClassLoader = jdbcDriverClass.getClassLoader();
 
     // For MySQL, the unique table identifier in debezium is 'databaseName.tableName'
