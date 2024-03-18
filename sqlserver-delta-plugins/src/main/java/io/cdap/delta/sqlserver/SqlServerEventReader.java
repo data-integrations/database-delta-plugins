@@ -32,8 +32,6 @@ import io.debezium.connector.sqlserver.SqlServerConnection;
 import io.debezium.connector.sqlserver.SqlServerConnector;
 import io.debezium.connector.sqlserver.SqlServerErrorHandler;
 import io.debezium.embedded.EmbeddedEngine;
-import io.debezium.jdbc.JdbcConfiguration;
-import io.debezium.jdbc.JdbcConnection;
 import io.debezium.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,13 +84,10 @@ public class SqlServerEventReader implements EventReader {
     // load sql server jdbc driver into class loader and use this loaded jdbc class to set the static factory
     // variable in SqlServerConnection for instantiation purpose later on.
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
-    String urlPattern = "jdbc:sqlserver://${" + JdbcConfiguration.HOSTNAME + "}:${" +
-      JdbcConfiguration.PORT + "};databaseName=${" + JdbcConfiguration.DATABASE + "}";
-    SqlServerConnection.factory = JdbcConnection.patternBasedFactory(urlPattern,
-                                                                     jdbcDriverClass.getName(),
-                                                                     jdbcDriverClass.getClassLoader());
-
     SqlServerErrorHandler.driverClassLoader = jdbcDriverClass.getClassLoader();
+    SqlServerConnection.jdbcDriverClass = jdbcDriverClass;
+
+
     // this is needed since sql server does not return the database information in the record
     String databaseName = config.getDatabase();
 

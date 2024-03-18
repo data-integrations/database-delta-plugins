@@ -169,7 +169,9 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
     DMLOperation.Type op;
     String opStr = val.get("op");
-    if ("c".equals(opStr)) {
+    // https://debezium.io/documentation/reference/1.9/connectors/mysql.html#mysql-snapshot-events
+    // Snapshot events are considered as "r"
+    if ("c".equals(opStr) || "r".equals(opStr)) {
       op = DMLOperation.Type.INSERT;
     } else if ("u".equals(opStr)) {
       op = DMLOperation.Type.UPDATE;
