@@ -3,14 +3,18 @@
  *
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.debezium.connector.mysql;
+package io.debezium.connector.mysql.legacy;
 
+import io.debezium.DebeziumException;
 import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.CommonConnectorConfig.EventProcessingFailureHandlingMode;
 import io.debezium.config.Configuration;
 import io.debezium.config.Configuration.Builder;
 import io.debezium.config.Field;
+import io.debezium.connector.mysql.GtidSet;
+import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.connector.mysql.MySqlConnectorConfig.SecureConnectionMode;
+import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.jdbc.JdbcConnection.ConnectionFactory;
@@ -42,22 +46,19 @@ public class MySqlJdbcContext implements AutoCloseable {
    * source.
    */
   public static final String MYSQL_CONNECTION_URL = "jdbc:mysql://${hostname}:${port}/?useInformationSchema=true&" +
-    "nullCatalogMeansCurrent=false&useSSL=${useSSL}&useUnicode=true&characterEncoding=UTF-8&" +
+    "nullCatalogMeansCurrent=false&useUnicode=true&characterEncoding=UTF-8&" +
     "characterSetResults=UTF-8&zeroDateTimeBehavior=CONVERT_TO_NULL&connectTimeout=${connectTimeout}";
   protected static final String JDBC_PROPERTY_LEGACY_DATETIME = "useLegacyDatetimeCode";
-
+  protected static final Logger LOGGER = LoggerFactory.getLogger(MySqlJdbcContext.class);
   private static final String SQL_SHOW_SYSTEM_VARIABLES = "SHOW VARIABLES";
   private static final String SQL_SHOW_SYSTEM_VARIABLES_CHARACTER_SET = "SHOW VARIABLES WHERE Variable_name IN " +
     "('character_set_server','collation_server')";
   private static final String SQL_SHOW_SESSION_VARIABLE_SSL_VERSION = "SHOW SESSION STATUS LIKE 'Ssl_version'";
-
   /**
    * ===================== This is a diff from the original file ===========================
    * We intentionally make the 'connectionFactor' a public static variable, so that we can set the value in app source.
    */
   public static ConnectionFactory connectionFactory;
-
-  protected final Logger logger = LoggerFactory.getLogger(getClass());
   protected final Configuration config;
   protected final JdbcConnection jdbc;
   private final Map<String, String> originalSystemProperties = new HashMap<>();
@@ -70,29 +71,47 @@ public class MySqlJdbcContext implements AutoCloseable {
     // per https://dev.mysql.com/doc/connector-j/5.1/en/connector-j-reference-charsets.html
     boolean useSSL = sslModeEnabled();
     Configuration jdbcConfig = this.config
-      .filter(x -> !(x.startsWith(DatabaseHistory.CONFIGURATION_FIELD_PREFIX_STRING) ||
-        x.equals(MySqlConnectorConfig.DATABASE_HISTORY.name())))
+      .filter(x -> !(x.startsWith(DatabaseHistory.CONFIGURATION_FIELD_PREFIX_STRING)
+        || x.equals(MySqlConnectorConfig.DATABASE_HISTORY.name())))
       .edit()
       .withDefault(MySqlConnectorConfig.PORT, MySqlConnectorConfig.PORT.defaultValue())
+      .withDefault("database.useCursorFetch", config.useCursorFetch())
       .build()
       .subset("database.", true);
 
     Builder jdbcConfigBuilder = jdbcConfig
       .edit()
       .with("connectTimeout", Long.toString(config.getConnectionTimeout().toMillis()))
-      .with("useSSL", Boolean.toString(useSSL));
+      .with("sslMode", sslMode().getValue());
+
+    if (useSSL) {
+      if (!Strings.isNullOrBlank(sslTrustStore())) {
+        jdbcConfigBuilder.with("trustCertificateKeyStoreUrl", "file:" + sslTrustStore());
+      }
+      if (sslTrustStorePassword() != null) {
+        jdbcConfigBuilder.with("trustCertificateKeyStorePassword", String.valueOf(sslTrustStorePassword()));
+      }
+      if (!Strings.isNullOrBlank(sslKeyStore())) {
+        jdbcConfigBuilder.with("clientCertificateKeyStoreUrl", "file:" + sslKeyStore());
+      }
+      if (sslKeyStorePassword() != null) {
+        jdbcConfigBuilder.with("clientCertificateKeyStorePassword", String.valueOf(sslKeyStorePassword()));
+      }
+    }
 
     final String legacyDateTime = jdbcConfig.getString(JDBC_PROPERTY_LEGACY_DATETIME);
     if (legacyDateTime == null) {
       jdbcConfigBuilder.with(JDBC_PROPERTY_LEGACY_DATETIME, "false");
     } else if ("true".equals(legacyDateTime)) {
-      logger.warn("'{}' is set to 'true'. This setting is not recommended and can result in timezone issues.",
+      LOGGER.warn("'{}' is set to 'true'. This setting is not recommended and can result in timezone issues.",
                   JDBC_PROPERTY_LEGACY_DATETIME);
     }
 
     jdbcConfig = jdbcConfigBuilder.build();
     String driverClassName = jdbcConfig.getString(MySqlConnectorConfig.JDBC_DRIVER);
-    this.jdbc = new JdbcConnection(jdbcConfig, connectionFactory);
+    this.jdbc = new JdbcConnection(JdbcConfiguration.adapt(jdbcConfig), connectionFactory,
+                                   () -> MySqlValueConverters.jdbcClassLoader,
+                                   "`", "`");
   }
 
   public Configuration config() {
@@ -104,7 +123,7 @@ public class MySqlJdbcContext implements AutoCloseable {
   }
 
   public Logger logger() {
-    return logger;
+    return LOGGER;
   }
 
   public String username() {
@@ -132,6 +151,24 @@ public class MySqlJdbcContext implements AutoCloseable {
     return sslMode() != SecureConnectionMode.DISABLED;
   }
 
+  public String sslKeyStore() {
+    return config.getString(MySqlConnectorConfig.SSL_KEYSTORE);
+  }
+
+  public char[] sslKeyStorePassword() {
+    String password = config.getString(MySqlConnectorConfig.SSL_KEYSTORE_PASSWORD);
+    return Strings.isNullOrBlank(password) ? null : password.toCharArray();
+  }
+
+  public String sslTrustStore() {
+    return config.getString(MySqlConnectorConfig.SSL_TRUSTSTORE);
+  }
+
+  public char[] sslTrustStorePassword() {
+    String password = config.getString(MySqlConnectorConfig.SSL_TRUSTSTORE_PASSWORD);
+    return Strings.isNullOrBlank(password) ? null : password.toCharArray();
+  }
+
   public EventProcessingFailureHandlingMode eventProcessingFailureHandlingMode() {
     String mode = config.getString(CommonConnectorConfig.EVENT_PROCESSING_FAILURE_HANDLING_MODE);
     if (mode == null) {
@@ -145,22 +182,11 @@ public class MySqlJdbcContext implements AutoCloseable {
     return EventProcessingFailureHandlingMode.parse(mode);
   }
 
-  public void start() {
-    if (sslModeEnabled()) {
-      originalSystemProperties.clear();
-      // Set the System properties for SSL for the MySQL driver ...
-      setSystemProperty("javax.net.ssl.keyStore", MySqlConnectorConfig.SSL_KEYSTORE, true);
-      setSystemProperty("javax.net.ssl.keyStorePassword", MySqlConnectorConfig.SSL_KEYSTORE_PASSWORD, false);
-      setSystemProperty("javax.net.ssl.trustStore", MySqlConnectorConfig.SSL_TRUSTSTORE, true);
-      setSystemProperty("javax.net.ssl.trustStorePassword", MySqlConnectorConfig.SSL_TRUSTSTORE_PASSWORD, false);
-    }
-  }
-
   public void shutdown() {
     try {
       jdbc.close();
     } catch (SQLException e) {
-      logger.error("Unexpected error shutting down the database connection", e);
+      LOGGER.error("Unexpected error shutting down the database connection", e);
     } finally {
       // Reset the system properties to their original value ...
       originalSystemProperties.forEach((name, value) -> {
@@ -201,8 +227,8 @@ public class MySqlJdbcContext implements AutoCloseable {
   /**
    * Determine the executed GTID set for MySQL.
    *
-   * @return the string representation of MySQL's GTID sets; never null but an empty string if the server does not use
-   * GTIDs
+   * @return the string representation of MySQL's GTID sets; never null but an empty string if the server does not
+   * use GTIDs
    */
   public String knownGtidSet() {
     AtomicReference<String> gtidSetStr = new AtomicReference<String>();
@@ -281,7 +307,7 @@ public class MySqlJdbcContext implements AutoCloseable {
       jdbc.query("SHOW GRANTS FOR CURRENT_USER", rs -> {
         while (rs.next()) {
           String grants = rs.getString(1);
-          logger.debug(grants);
+          LOGGER.debug(grants);
           if (grants == null) {
             return;
           }
@@ -292,13 +318,13 @@ public class MySqlJdbcContext implements AutoCloseable {
         }
       });
     } catch (SQLException e) {
-      throw new ConnectException("Unexpected error while connecting to MySQL and looking at privileges for current " +
-                                   "user: ", e);
+      throw new ConnectException("Unexpected error while connecting to MySQL and looking at privileges for " +
+                                   "current user: ", e);
     }
     return result.get();
   }
 
-  protected String connectionString() {
+  public String connectionString() {
     return jdbc.connectionString(MYSQL_CONNECTION_URL);
   }
 
@@ -309,7 +335,7 @@ public class MySqlJdbcContext implements AutoCloseable {
    */
   protected Map<String, String> readMySqlCharsetSystemVariables() {
     // Read the system variables from the MySQL instance and get the current database name ...
-    logger.debug("Reading MySQL charset-related system variables before parsing DDL history.");
+    LOGGER.debug("Reading MySQL charset-related system variables before parsing DDL history.");
     return querySystemVariables(SQL_SHOW_SYSTEM_VARIABLES_CHARACTER_SET);
   }
 
@@ -318,23 +344,22 @@ public class MySqlJdbcContext implements AutoCloseable {
    *
    * @return the system variables that are related to server character sets; never null
    */
-  protected Map<String, String> readMySqlSystemVariables() {
+  public Map<String, String> readMySqlSystemVariables() {
     // Read the system variables from the MySQL instance and get the current database name ...
-    logger.debug("Reading MySQL system variables");
+    LOGGER.debug("Reading MySQL system variables");
     return querySystemVariables(SQL_SHOW_SYSTEM_VARIABLES);
   }
 
   private Map<String, String> querySystemVariables(String statement) {
     Map<String, String> variables = new HashMap<>();
     try {
-      start();
       jdbc.connect().query(statement, rs -> {
         while (rs.next()) {
           String varName = rs.getString(1);
           String value = rs.getString(2);
           if (varName != null && value != null) {
             variables.put(varName, value);
-            logger.debug("\t{} = {}",
+            LOGGER.debug("\t{} = {}",
                          Strings.pad(varName, 45, ' '),
                          Strings.pad(value, 45, ' '));
           }
@@ -345,6 +370,36 @@ public class MySqlJdbcContext implements AutoCloseable {
     }
 
     return variables;
+  }
+
+  /**
+   * Read the MySQL default character sets for exisiting databases.
+   *
+   * @return the map of database names with their default character sets; never null
+   */
+  protected Map<String, DatabaseLocales> readDatabaseCollations() {
+    LOGGER.debug("Reading default database charsets");
+    try {
+      return jdbc.connect().queryAndMap("SELECT schema_name, default_character_set_name, " +
+                                          "default_collation_name FROM information_schema.schemata", rs -> {
+        final Map<String, DatabaseLocales> charsets = new HashMap<>();
+        while (rs.next()) {
+          String dbName = rs.getString(1);
+          String charset = rs.getString(2);
+          String collation = rs.getString(3);
+          if (dbName != null && (charset != null || collation != null)) {
+            charsets.put(dbName, new DatabaseLocales(charset, collation));
+            LOGGER.debug("\t{} = {}, {}",
+                         Strings.pad(dbName, 45, ' '),
+                         Strings.pad(charset, 45, ' '),
+                         Strings.pad(collation, 45, ' '));
+          }
+        }
+        return charsets;
+      });
+    } catch (SQLException e) {
+      throw new DebeziumException("Error reading default database charsets: " + e.getMessage(), e);
+    }
   }
 
   protected String setStatementFor(Map<String, String> variables) {
@@ -403,13 +458,41 @@ public class MySqlJdbcContext implements AutoCloseable {
    *
    * @return the session variables that are related to sessions ssl version
    */
-  protected String getSessionVariableForSslVersion() {
+  public String getSessionVariableForSslVersion() {
     final String sslVersion = "Ssl_version";
-    logger.debug("Reading MySQL Session variable for Ssl Version");
+    LOGGER.debug("Reading MySQL Session variable for Ssl Version");
     Map<String, String> sessionVariables = querySystemVariables(SQL_SHOW_SESSION_VARIABLE_SSL_VERSION);
     if (!sessionVariables.isEmpty() && sessionVariables.containsKey(sslVersion)) {
       return sessionVariables.get(sslVersion);
     }
     return null;
+  }
+
+  /**
+   * A static class entity for handling database's locale
+   */
+  public static class DatabaseLocales {
+    private final String charset;
+    private final String collation;
+
+    public DatabaseLocales(String charset, String collation) {
+      this.charset = charset;
+      this.collation = collation;
+    }
+
+    public void appendToDdlStatement(String dbName, StringBuilder ddl) {
+      if (charset != null) {
+        LOGGER.debug("Setting default charset '{}' for database '{}'", charset, dbName);
+        ddl.append(" CHARSET ").append(charset);
+      } else {
+        LOGGER.info("Default database charset for '{}' not found", dbName);
+      }
+      if (collation != null) {
+        LOGGER.debug("Setting default collation '{}' for database '{}'", collation, dbName);
+        ddl.append(" COLLATE ").append(collation);
+      } else {
+        LOGGER.info("Default database collation for '{}' not found", dbName);
+      }
+    }
   }
 }

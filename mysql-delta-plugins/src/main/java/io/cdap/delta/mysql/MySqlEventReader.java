@@ -27,13 +27,12 @@ import io.cdap.delta.plugin.common.DBSchemaHistory;
 import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
 import io.cdap.delta.plugin.common.RuntimeArguments;
 import io.debezium.DebeziumException;
-import io.debezium.config.CommonConnectorConfig;
 import io.debezium.config.Configuration;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
-import io.debezium.connector.mysql.MySqlJdbcContext;
 import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
+import io.debezium.connector.mysql.legacy.MySqlJdbcContext;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.jdbc.JdbcValueConverters;
@@ -93,6 +92,7 @@ public class MySqlEventReader implements EventReader {
                                                                             jdbcDriverClass.getName(),
                                                                             jdbcDriverClass.getClassLoader());
     MySqlValueConverters.jdbcClassLoader = jdbcDriverClass.getClassLoader();
+    MySqlAntlrDdlParser.jdbcClassLoader = jdbcDriverClass.getClassLoader();
 
     // For MySQL, the unique table identifier in debezium is 'databaseName.tableName'
     Map<String, SourceTable> sourceTableMap = sourceTables.stream().collect(
@@ -124,6 +124,7 @@ public class MySqlEventReader implements EventReader {
       .with("database.history.store.only.monitored.tables.ddl", true)
       .with("table.include.list", String.join(",", sourceTableMap.keySet()))
       .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only")
+      .with("internal.implementation", "legacy")
       .with(MySqlConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);
 
     if (config.getConsumerID() != null) {
