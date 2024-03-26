@@ -41,5 +41,7 @@
     for MySqlConnectorConfig.java file, because we do not want to change the static method and variable name -->
   <suppress checks="MethodNameCheck" files="MySqlConnectorConfig.java" />
   <suppress checks="StaticVariableNameCheck" files="MySqlConnectorConfig.java" />
+<!--  Suppress a fall through which is intentional by debezium -->
+  <suppress checks="FallThrough" files="MySqlValueConverters.java" />
 
 </suppressions>
