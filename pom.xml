@@ -63,6 +63,7 @@
     <debezium.version>1.9.7.Final</debezium.version>
     <slf4j.version>1.7.25</slf4j.version>
     <guava.version>30.0-jre</guava.version>
+    <jackson.version>2.23.0</jackson.version>
     <jacoco.version>0.8.8</jacoco.version>
     <!-- Need default value when coverage is not collected -->
     <argLine />
@@ -80,6 +81,19 @@
       </snapshots>
     </repository>
   </repositories>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Align the Jackson jars that debezium 1.9.7 and Kafka Connect bring in (2.12.6 - 2.13.2.2). -->
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>${jackson.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <dependency>
