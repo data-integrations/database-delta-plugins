@@ -63,6 +63,7 @@
     <debezium.version>1.9.7.Final</debezium.version>
     <slf4j.version>1.7.25</slf4j.version>
     <guava.version>30.0-jre</guava.version>
+    <jackson.version>2.23.0</jackson.version>
     <jacoco.version>0.8.8</jacoco.version>
     <!-- Need default value when coverage is not collected -->
     <argLine />
@@ -81,6 +82,19 @@
     </repository>
   </repositories>
 
+  <dependencyManagement>
+    <dependencies>
+      <!-- Align the Jackson jars that debezium 1.9.7 and Kafka Connect bring in (2.12.6 - 2.13.2.2). -->
+      <dependency>
+        <groupId>com.fasterxml.jackson</groupId>
+        <artifactId>jackson-bom</artifactId>
+        <version>${jackson.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <dependency>
       <groupId>io.debezium</groupId>
@@ -94,11 +108,6 @@
       </exclusions>
     </dependency>
     <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>1.0.9</version>
-    </dependency>
-    <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>log4j-over-slf4j</artifactId>
       <version>${slf4j.version}</version>
@@ -107,11 +116,24 @@
       <groupId>io.cdap.delta</groupId>
       <artifactId>delta-api</artifactId>
       <version>${delta.version}</version>
+      <exclusions>
+        <!-- delta-api 0.9.0 leaks junit at compile scope; keep it out of the plugin jars. -->
+        <exclusion>
+          <groupId>junit</groupId>
+          <artifactId>junit</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>${guava.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 
