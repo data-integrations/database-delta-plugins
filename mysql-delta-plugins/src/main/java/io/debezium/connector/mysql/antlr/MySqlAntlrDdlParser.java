@@ -16,6 +16,8 @@
 
 package io.debezium.connector.mysql.antlr;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.sql.Types;
 import java.util.Arrays;
 import java.util.List;
@@ -27,8 +29,8 @@ import java.util.stream.Collectors;
 import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
-
-import com.mysql.cj.CharsetMapping;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import io.debezium.antlr.AntlrDdlParser;
 import io.debezium.antlr.AntlrDdlParserListener;
@@ -54,6 +56,10 @@ import io.debezium.relational.Tables.TableFilter;
  * @author Roman Kuchár <kucharrom@gmail.com>.
  */
 public class MySqlAntlrDdlParser extends AntlrDdlParser<MySqlLexer, MySqlParser> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MySqlAntlrDdlParser.class);
+    // Diff from the original Debezium file: class loader of the MySQL JDBC driver, set by MySqlEventReader.
+    public static ClassLoader jdbcClassLoader;
 
     private final ConcurrentMap<String, String> charsetNameForDatabase = new ConcurrentHashMap<>();
     private final MySqlValueConverters converters;
@@ -456,18 +462,33 @@ public class MySqlAntlrDdlParser extends AntlrDdlParser<MySqlLexer, MySqlParser>
      * @return character set
      */
     public String extractCharset(CharsetNameContext charsetNode, CollationNameContext collationNode) {
-        String charsetName = null;
+        // Diff from the original Debezium file: same logic as the previous CDAP copy, loading CharsetMapping through
+        // jdbcClassLoader because the MySQL JDBC driver is not bundled with the plugin.
+        String charsetName = "DEFAULT";
         if (charsetNode != null && charsetNode.getText() != null) {
-            charsetName = withoutQuotes(charsetNode.getText());
+            return withoutQuotes(charsetNode.getText());
         }
-        else if (collationNode != null && collationNode.getText() != null) {
-            final String collationName = withoutQuotes(collationNode.getText()).toLowerCase();
-            for (int index = 0; index < CharsetMapping.MAP_SIZE; index++) {
-                if (collationName.equals(
-                        CharsetMapping.getStaticCollationNameForCollationIndex(index))) {
-                    charsetName = CharsetMapping.getStaticMysqlCharsetNameForCollationIndex(index);
-                    break;
+        if (collationNode != null && collationNode.getText() != null) {
+            try {
+                Class<?> charsetMappingClass = jdbcClassLoader.loadClass("com.mysql.cj.CharsetMapping");
+                Method getStaticCollationNameForCollationIndex = charsetMappingClass
+                        .getMethod("getStaticCollationNameForCollationIndex", Integer.class);
+                getStaticCollationNameForCollationIndex.setAccessible(true);
+                Method getStaticMysqlCharsetNameForCollationIndex = charsetMappingClass
+                        .getMethod("getStaticMysqlCharsetNameForCollationIndex", Integer.class);
+                getStaticMysqlCharsetNameForCollationIndex.setAccessible(true);
+
+                final String collationName = withoutQuotes(collationNode.getText()).toLowerCase();
+                for (int index = 0; index < 1024; index++) {
+                    if (collationName.equals(getStaticCollationNameForCollationIndex.invoke(null, index))) {
+                        charsetName = (String) getStaticMysqlCharsetNameForCollationIndex.invoke(null, index);
+                        break;
+                    }
                 }
+            }
+            catch (ClassNotFoundException | InvocationTargetException | NoSuchMethodException | IllegalAccessException e) {
+                LOG.debug("Setting 'DEFAULT' as charset. Tried to load CharsetName from CollationName but failed to load "
+                        + "the required class or methods : {}", e);
             }
         }
         return charsetName;

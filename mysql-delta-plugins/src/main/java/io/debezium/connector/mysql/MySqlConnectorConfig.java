@@ -624,12 +624,13 @@ public class MySqlConnectorConfig extends HistorizedRelationalDatabaseConnectorC
     public static final Field TABLES_IGNORE_BUILTIN = RelationalDatabaseConnectorConfig.TABLE_IGNORE_BUILTIN
             .withDependents(DATABASE_INCLUDE_LIST_NAME);
 
+    // Diff from the original Debezium file: no default driver class, since the MySQL JDBC driver is not bundled with
+    // the plugin and Kafka would try to load the default class.
     public static final Field JDBC_DRIVER = Field.create("database.jdbc.driver")
             .withDisplayName("Jdbc Driver Class Name")
             .withType(Type.CLASS)
             .withGroup(Field.createGroupEntry(Field.Group.CONNECTION, 41))
             .withWidth(Width.MEDIUM)
-            .withDefault(com.mysql.cj.jdbc.Driver.class.getName())
             .withImportance(Importance.LOW)
             .withValidation(Field::isClassName)
             .withDescription("JDBC Driver class name used to connect to the MySQL database server.");

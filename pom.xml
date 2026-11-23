@@ -60,10 +60,11 @@
 
   <properties>
     <delta.version>0.9.0</delta.version>
-    <debezium.version>1.9.7.Final</debezium.version>
-    <slf4j.version>1.7.25</slf4j.version>
-    <guava.version>30.0-jre</guava.version>
+    <debezium.version>2.3.7.Final</debezium.version>
+    <slf4j.version>1.7.36</slf4j.version>
+    <guava.version>32.0.0-jre</guava.version>
     <jackson.version>2.23.0</jackson.version>
+    <gson.version>2.15.0</gson.version>
     <jacoco.version>0.8.8</jacoco.version>
     <!-- Need default value when coverage is not collected -->
     <argLine />
@@ -84,13 +85,18 @@
 
   <dependencyManagement>
     <dependencies>
-      <!-- Align the Jackson jars that debezium 1.9.7 and Kafka Connect bring in (2.12.6 - 2.13.2.2). -->
+      <!-- Align the Jackson and Gson jars brought in by Debezium and CDAP APIs. -->
       <dependency>
         <groupId>com.fasterxml.jackson</groupId>
         <artifactId>jackson-bom</artifactId>
         <version>${jackson.version}</version>
         <type>pom</type>
         <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.google.code.gson</groupId>
+        <artifactId>gson</artifactId>
+        <version>${gson.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -145,7 +151,7 @@
         <plugin>
           <groupId>org.apache.felix</groupId>
           <artifactId>maven-bundle-plugin</artifactId>
-          <version>3.5.1</version>
+          <version>5.1.9</version>
           <extensions>true</extensions>
           <executions>
             <execution>
@@ -255,10 +261,9 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.1</version>
+        <version>3.16.0</version>
         <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
+          <release>11</release>
         </configuration>
       </plugin>
 
