@@ -111,13 +111,13 @@ public class SqlServerRecordConsumer implements Consumer<SourceRecord> {
     }
 
     String topicName = sourceRecord.topic();
-    // the topic name will always be like this: [db.server.name].[schema].[table]
+    // the topic name will always be like this: [topic.prefix].[database].[schema].[table]
     if (topicName == null) {
       return; // safety check to avoid NPE
     }
     String[] splits = topicName.split("\\.");
-    String schemaName = splits[1];
-    String tableName = splits[2];
+    String schemaName = splits[2];
+    String tableName = splits[3];
     String sourceTableId = schemaName + "." + tableName;
     // If the map is empty, we should read all DDL/DML events and columns of all tables
     boolean readAllTables = sourceTableMap.isEmpty();

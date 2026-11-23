@@ -23,8 +23,10 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.MemoryOffsetBackingStore;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The sql server constant offset store class is used by debezium only to retrieve the offset information.
@@ -36,6 +38,12 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
 
   static final String SNAPSHOT_COMPLETED = "snapshot_completed";
   static final String REPLICATION_CONNECTOR_NAME = "replication.connector.name";
+
+  // Required by Kafka 3.x MemoryOffsetBackingStore. Partitions are not tracked since nothing is stored.
+  @Override
+  public Set<Map<String, Object>> connectorPartitions(String connectorName) {
+    return Collections.emptySet();
+  }
 
   @Override
   public void configure(WorkerConfig config) {
@@ -70,5 +78,10 @@ public class SqlServerConstantOffsetBackingStore extends MemoryOffsetBackingStor
     byte[] offsetBytes = Bytes.toBytes(GSON.toJson(offset));
 
     data.put(ByteBuffer.wrap(Bytes.toBytes(key)), ByteBuffer.wrap(offsetBytes));
+    // Debezium 2.x serializes offset keys without the schema envelope, and the SQL Server partition includes the
+    // database name.
+    String v2Key = "[\"" + replicationConnectorName + "\",{\"server\":\"dummy\",\"database\":\""
+      + originalConfig.get("database.names") + "\"}]";
+    data.put(ByteBuffer.wrap(Bytes.toBytes(v2Key)), ByteBuffer.wrap(offsetBytes));
   }
 }

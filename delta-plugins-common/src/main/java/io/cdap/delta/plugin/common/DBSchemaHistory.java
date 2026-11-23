@@ -22,23 +22,30 @@ import io.debezium.config.Configuration;
 import io.debezium.connector.AbstractSourceInfo;
 import io.debezium.document.DocumentReader;
 import io.debezium.document.DocumentWriter;
-import io.debezium.relational.history.AbstractDatabaseHistory;
-import io.debezium.relational.history.DatabaseHistoryException;
-import io.debezium.relational.history.DatabaseHistoryListener;
+import io.debezium.relational.Tables;
+import io.debezium.relational.ddl.DdlParser;
+import io.debezium.relational.history.AbstractSchemaHistory;
 import io.debezium.relational.history.HistoryRecord;
 import io.debezium.relational.history.HistoryRecordComparator;
+import io.debezium.relational.history.SchemaHistoryException;
+import io.debezium.relational.history.SchemaHistoryListener;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
  * History of DB changes.
  */
-public class DBSchemaHistory extends AbstractDatabaseHistory {
+public class DBSchemaHistory extends AbstractSchemaHistory {
   private static final String KEY = "history";
+  private static final String SERVER_KEY = "server";
+  private static final String DATABASE_KEY = "database";
   // Hacky, fix when usage of EmbeddedEngine is replaced
   public static DeltaRuntimeContext deltaRuntimeContext;
   private final DocumentWriter writer = DocumentWriter.defaultWriter();
@@ -50,14 +57,28 @@ public class DBSchemaHistory extends AbstractDatabaseHistory {
   }
 
   @Override
-  public void configure(Configuration config, HistoryRecordComparator comparator, DatabaseHistoryListener listener,
-    boolean useCatalogBeforeSchema) {
+  public void configure(Configuration config, HistoryRecordComparator comparator, SchemaHistoryListener listener,
+                        boolean useCatalogBeforeSchema) {
     this.comparator = comparator == null ? HistoryRecordComparator.INSTANCE : comparator;
     super.configure(config, comparator, listener, useCatalogBeforeSchema);
   }
 
   @Override
-  protected synchronized void storeRecord(HistoryRecord record) throws DatabaseHistoryException {
+  public void recover(Map<Map<String, ?>, Map<String, ?>> offsets, Tables schema, DdlParser ddlParser) {
+    // Records written by Debezium 1.x use {"server": ...} as the source partition, while Debezium 2.x SQL Server uses
+    // {"server": ..., "database": ...}. Map the old partition to the same offset so those records are still recovered.
+    Map<Map<String, ?>, Map<String, ?>> expandedOffsets = new HashMap<>(offsets);
+    for (Map.Entry<Map<String, ?>, Map<String, ?>> entry : offsets.entrySet()) {
+      Map<String, ?> source = entry.getKey();
+      if (source != null && source.containsKey(SERVER_KEY) && source.containsKey(DATABASE_KEY)) {
+        expandedOffsets.putIfAbsent(Collections.singletonMap(SERVER_KEY, source.get(SERVER_KEY)), entry.getValue());
+      }
+    }
+    super.recover(expandedOffsets, schema, ddlParser);
+  }
+
+  @Override
+  protected synchronized void storeRecord(HistoryRecord record) throws SchemaHistoryException {
     List<HistoryRecord> history = getHistory();
     //ignore the history record already seen
     //we serialize the history record once DDL event is seen in the source
