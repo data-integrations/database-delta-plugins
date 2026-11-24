@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.microsoft.sqlserver.jdbc.SQLServerDriver;
+import java.sql.Driver;
 
 import io.debezium.annotation.VisibleForTesting;
 import io.debezium.config.CommonConnectorConfig;
@@ -62,6 +62,7 @@ import io.debezium.relational.TableId;
 public class SqlServerConnection extends JdbcConnection {
 
     public static final String INSTANCE_NAME = "instance";
+    public static Class<? extends Driver> jdbcDriverClass;
 
     private static final String GET_DATABASE_NAME = "SELECT name FROM sys.databases WHERE name = ?";
 
@@ -213,8 +214,8 @@ public class SqlServerConnection extends JdbcConnection {
 
     private static ConnectionFactory createConnectionFactory(SqlServerJdbcConfiguration config, boolean useSingleDatabase) {
         return JdbcConnection.patternBasedFactory(createUrlPattern(config, useSingleDatabase),
-                SQLServerDriver.class.getName(),
-                SqlServerConnection.class.getClassLoader(),
+                jdbcDriverClass.getName(),
+                jdbcDriverClass.getClassLoader(),
                 JdbcConfiguration.PORT.withDefault(SqlServerConnectorConfig.PORT.defaultValueAsString()));
     }
 

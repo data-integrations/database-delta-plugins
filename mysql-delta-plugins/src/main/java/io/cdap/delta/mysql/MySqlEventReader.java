@@ -28,13 +28,12 @@ import io.cdap.delta.plugin.common.NotifyingCompletionCallback;
 import io.cdap.delta.plugin.common.RuntimeArguments;
 import io.debezium.DebeziumException;
 import io.debezium.config.Configuration;
+import io.debezium.connector.mysql.MySqlConnection;
 import io.debezium.connector.mysql.MySqlConnector;
 import io.debezium.connector.mysql.MySqlConnectorConfig;
 import io.debezium.connector.mysql.MySqlValueConverters;
 import io.debezium.connector.mysql.antlr.MySqlAntlrDdlParser;
-import io.debezium.connector.mysql.legacy.MySqlJdbcContext;
 import io.debezium.embedded.EmbeddedEngine;
-import io.debezium.jdbc.JdbcConnection;
 import io.debezium.jdbc.JdbcValueConverters;
 import io.debezium.jdbc.TemporalPrecisionMode;
 import io.debezium.relational.Tables;
@@ -48,6 +47,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.Temporal;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,7 +75,14 @@ public class MySqlEventReader implements EventReader {
     this.config = config;
     this.context = context;
     this.emitter = emitter;
-    this.executorService = Executors.newSingleThreadScheduledExecutor();
+    // Debezium 2.x loads connector classes through the thread context classloader, so the engine thread
+    // must use the plugin classloader.
+    ClassLoader pluginClassLoader = getClass().getClassLoader();
+    this.executorService = Executors.newSingleThreadScheduledExecutor(runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setContextClassLoader(pluginClassLoader);
+      return thread;
+    });
     this.failedToStop = false;
     this.debeziumConnectorConfigs = RuntimeArguments.extractPrefixed(SOURCE_CONNECTOR_PREFIX,
                                                                      context.getRuntimeArguments());
@@ -84,14 +91,11 @@ public class MySqlEventReader implements EventReader {
   @Override
   public void start(Offset offset) {
     // load mysql jdbc driver into class loader here and use this loaded jdbc class and class loader to set static
-    // variable 'connectionFactory' in MySqlJdbcContext and static variable 'jdbcClassLoader' in MySqlValueConverters.
+    // variable 'jdbcDriverClass' in MySqlConnection and static variable 'jdbcClassLoader' in MySqlAntlrDdlParser.
     // note that, this is a short-term hacky solution for us to solve the problem of excluding mysql-jdbc jar from MySql
     // delta plugin's dependencies in CDAP.
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
-    MySqlJdbcContext.connectionFactory = JdbcConnection.patternBasedFactory(MySqlJdbcContext.MYSQL_CONNECTION_URL,
-                                                                            jdbcDriverClass.getName(),
-                                                                            jdbcDriverClass.getClassLoader());
-    MySqlValueConverters.jdbcClassLoader = jdbcDriverClass.getClassLoader();
+    MySqlConnection.jdbcDriverClass = jdbcDriverClass;
     MySqlAntlrDdlParser.jdbcClassLoader = jdbcDriverClass.getClassLoader();
 
     // For MySQL, the unique table identifier in debezium is 'databaseName.tableName'
@@ -117,49 +121,58 @@ public class MySqlEventReader implements EventReader {
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
       .with("database.password", config.getPassword())
-      .with("database.history", DBSchemaHistory.class.getName())
+      .with("schema.history.internal", DBSchemaHistory.class.getName())
       .with("database.include.list", config.getDatabase())
-      .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
+      .with("topic.prefix", "dummy") // this is the kafka topic prefix for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
-      .with("database.history.store.only.monitored.tables.ddl", true)
+      .with("schema.history.internal.store.only.captured.tables.ddl", true)
       .with("table.include.list", String.join(",", sourceTableMap.keySet()))
       .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only")
-      .with("internal.implementation", "legacy")
       .with(MySqlConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);
 
     if (config.getConsumerID() != null) {
-      // If not provided debezium will randomly pick integer between 5400 and 6400.
       configBuilder = configBuilder.with("database.server.id", config.getConsumerID() + context.getInstanceId());
+    } else {
+      // Debezium 2.x no longer picks a default, so keep the Debezium 1.x behavior of a random id in [5400, 6400).
+      configBuilder = configBuilder.with("database.server.id", 5400 + new Random().nextInt(1000));
     }
 
     LOG.info("Overriding mysql connector configs with arguments {}", debeziumConnectorConfigs);
     for (Map.Entry<String, String> entry: debeziumConnectorConfigs.entrySet()) {
       configBuilder = configBuilder.with(entry.getKey(), entry.getValue());
+      // Debezium 2.x renamed 'database.history.*' to 'schema.history.internal.*'; keep honoring the old names.
+      if (entry.getKey().equals("database.history.store.only.monitored.tables.ddl")) {
+        configBuilder = configBuilder.with("schema.history.internal.store.only.captured.tables.ddl", entry.getValue());
+      } else if (entry.getKey().startsWith("database.history.")) {
+        configBuilder = configBuilder.with(
+          "schema.history.internal." + entry.getKey().substring("database.history.".length()), entry.getValue());
+      }
     }
 
     Configuration debeziumConf = configBuilder.build();
     LOG.info("Debezium configuration : {}", debeziumConf);
-    MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
-    DBSchemaHistory.deltaRuntimeContext = context;
-    /*
-     * All snapshot events or schema history record have same position/offset
-     * if replicator was stopped  or paused from middle of snapshot, it
-     * will resume from beginning.
-     */
-    if (offset.get().isEmpty() || "true".equalsIgnoreCase(isSnapshot)) {
-      try {
-        DBSchemaHistory.wipeHistory();
-      } catch (IOException e) {
-        throw new RuntimeException("Unable to wipe schema history at start of replication.", e);
-      }
-    }
-
-    MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
-    DdlParser ddlParser = new MySqlAntlrDdlParser(mySqlValueConverters, tableId -> true);
 
     ClassLoader oldCL = Thread.currentThread().getContextClassLoader();
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
     try {
+      MySqlConnectorConfig mysqlConf = new MySqlConnectorConfig(debeziumConf);
+      DBSchemaHistory.deltaRuntimeContext = context;
+      /*
+       * All snapshot events or schema history record have same position/offset
+       * if replicator was stopped  or paused from middle of snapshot, it
+       * will resume from beginning.
+       */
+      if (offset.get().isEmpty() || "true".equalsIgnoreCase(isSnapshot)) {
+        try {
+          DBSchemaHistory.wipeHistory();
+        } catch (IOException e) {
+          throw new RuntimeException("Unable to wipe schema history at start of replication.", e);
+        }
+      }
+
+      MySqlValueConverters mySqlValueConverters = getValueConverters(mysqlConf);
+      DdlParser ddlParser = new MySqlAntlrDdlParser(mySqlValueConverters, tableId -> true);
+
       // Create the engine with this configuration ...
       engine = EmbeddedEngine.create()
         .using(debeziumConf)
