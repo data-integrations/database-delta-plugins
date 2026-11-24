@@ -43,6 +43,10 @@
           <groupId>mysql</groupId>
           <artifactId>mysql-connector-java</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>com.mysql</groupId>
+          <artifactId>mysql-connector-j</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>

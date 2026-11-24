@@ -40,7 +40,7 @@ import java.util.List;
 @RunWith(MockitoJUnitRunner.class)
 public class SqlServerRecordConsumerTest {
   private static final String DATABASE = "AdventureWorks2014";
-  private static final String TOPICNAME = "dbo.testreplication.npe";
+  private static final String TOPICNAME = "dummy.dbo.testreplication.npe";
 
   @Test(expected = DeltaFailureRuntimeException.class)
   public void testTableWithoutPrimaryKey() {
