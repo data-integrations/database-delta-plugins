@@ -43,6 +43,10 @@
           <groupId>mysql</groupId>
           <artifactId>mysql-connector-java</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>com.mysql</groupId>
+          <artifactId>mysql-connector-j</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -59,7 +63,7 @@
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
-      <version>3.9.1</version>
+      <version>3.9.2</version>
     </dependency>
   </dependencies>
 

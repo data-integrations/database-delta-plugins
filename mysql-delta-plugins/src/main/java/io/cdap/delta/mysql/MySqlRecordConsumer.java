@@ -129,6 +129,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
     StructuredRecord val = Records.convert((Struct) sourceRecord.value(), schemaMappingCache);
     String ddl = val.get("ddl");
+    String ddlDatabaseName = val.get("databaseName");
     StructuredRecord source = val.get("source");
     if (source == null) {
       // This should not happen, 'source' is a mandatory field in sourceRecord from debezium
@@ -140,6 +141,10 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
 
     try {
       if (ddl != null) {
+        // Debezium 2.x does not emit 'USE <database>' before streaming DDL, so set the schema from the event.
+        if (ddlDatabaseName != null && !ddlDatabaseName.isEmpty()) {
+          ddlParser.setCurrentSchema(ddlDatabaseName);
+        }
         handleDDL(ddl, recordOffset, isSnapshot, readAllTables);
         return;
       }
@@ -230,7 +235,7 @@ public class MySqlRecordConsumer implements Consumer<SourceRecord> {
     ddlParser.getDdlChanges().reset();
     ddlParser.parse(ddlStatement, tables);
     AtomicReference<InterruptedException> interrupted = new AtomicReference<>();
-    ddlParser.getDdlChanges().groupEventsByDatabase((databaseName, events) -> {
+    ddlParser.getDdlChanges().getEventsByDatabase((databaseName, events) -> {
       if (interrupted.get() != null) {
         return;
       }

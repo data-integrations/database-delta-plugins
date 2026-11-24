@@ -23,8 +23,10 @@ import org.apache.kafka.connect.storage.MemoryOffsetBackingStore;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Returns an offset based on a configuration setting and doesn't actually store anything.
@@ -46,6 +48,12 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
 
   private static final Gson GSON = new Gson();
 
+  // Required by Kafka 3.x MemoryOffsetBackingStore. Partitions are not tracked since nothing is stored.
+  @Override
+  public Set<Map<String, Object>> connectorPartitions(String connectorName) {
+    return Collections.emptySet();
+  }
+
   @Override
   public void configure(WorkerConfig config) {
     Map<String, String> originalConfig = config.originalsStrings();
@@ -61,6 +69,10 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
       StandardCharsets.UTF_8.encode("{\"schema\":null,\"payload\":[\""
                                       + replicationConnectorName
                                       + "\",{\"server\":\"dummy\"}]}");
+    ByteBuffer schemalessKey =
+      StandardCharsets.UTF_8.encode("[\""
+                                      + replicationConnectorName
+                                      + "\",{\"server\":\"dummy\"}]");
     Map<String, Object> offset = new HashMap<>();
     if (!Strings.isNullOrEmpty(fileStr)) {
       offset.put(FILE, fileStr);
@@ -86,5 +98,7 @@ public class MySqlConstantOffsetBackingStore extends MemoryOffsetBackingStore {
     }
 
     data.put(key, StandardCharsets.UTF_8.encode(GSON.toJson(offset)));
+    // Debezium 2.x serializes offset keys without the schema envelope.
+    data.put(schemalessKey, StandardCharsets.UTF_8.encode(GSON.toJson(offset)));
   }
 }
