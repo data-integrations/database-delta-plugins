@@ -19,6 +19,8 @@ package io.debezium.connector.mysql;
 import static io.debezium.config.CommonConnectorConfig.DATABASE_CONFIG_PREFIX;
 import static io.debezium.config.CommonConnectorConfig.DRIVER_CONFIG_PREFIX;
 
+import java.lang.reflect.Method;
+import java.sql.Driver;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -31,8 +33,6 @@ import java.util.OptionalLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.mysql.cj.CharsetMapping;
 
 import io.debezium.DebeziumException;
 import io.debezium.config.CommonConnectorConfig;
@@ -62,6 +62,12 @@ public class MySqlConnection extends JdbcConnection {
     private static final String SQL_SHOW_SYSTEM_VARIABLES_CHARACTER_SET = "SHOW VARIABLES WHERE Variable_name IN ('character_set_server','collation_server')";
     private static final String SQL_SHOW_SESSION_VARIABLE_SSL_VERSION = "SHOW SESSION STATUS LIKE 'Ssl_version'";
     private static final String QUOTED_CHARACTER = "`";
+
+    /**
+     * Diff from the original Debezium file: the MySQL JDBC driver is not bundled with the plugin, so MySqlEventReader
+     * sets the driver class loaded from the CDAP JDBC plugin, and the driver and CharsetMapping are loaded from it.
+     */
+    public static Class<? extends Driver> jdbcDriverClass;
 
     protected static final String URL_PATTERN = "jdbc:mysql://${hostname}:${port}/?useInformationSchema=true&nullCatalogMeansCurrent=false&useUnicode=true&characterEncoding=UTF-8&characterSetResults=UTF-8&zeroDateTimeBehavior=CONVERT_TO_NULL&connectTimeout=${connectTimeout}";
 
@@ -479,15 +485,33 @@ public class MySqlConnection extends JdbcConnection {
     }
 
     public static String getJavaEncodingForMysqlCharSet(String mysqlCharsetName) {
-        return CharsetMappingWrapper.getJavaEncodingForMysqlCharSet(mysqlCharsetName);
-    }
-
-    /**
-     * Helper to gain access to protected method
-     */
-    private final static class CharsetMappingWrapper extends CharsetMapping {
-        static String getJavaEncodingForMysqlCharSet(String mySqlCharsetName) {
-            return CharsetMapping.getStaticJavaEncodingForMysqlCharset(mySqlCharsetName);
+        // Diff from the original Debezium file: load CharsetMapping from the JDBC driver's class loader.
+        Class<?> charsetMappingClass;
+        try {
+            charsetMappingClass = jdbcDriverClass.getClassLoader().loadClass("com.mysql.cj.CharsetMapping");
+        }
+        catch (ClassNotFoundException e) {
+            throw new RuntimeException("Failed to load class com.mysql.cj.CharsetMapping: " + e.getMessage(), e);
+        }
+        Method getCharsetMethod;
+        try {
+            getCharsetMethod = charsetMappingClass.getMethod("getJavaEncodingForMysqlCharset", String.class);
+        }
+        catch (NoSuchMethodException e) {
+            try {
+                getCharsetMethod = charsetMappingClass.getDeclaredMethod("getStaticJavaEncodingForMysqlCharset", String.class);
+                getCharsetMethod.setAccessible(true);
+            }
+            catch (NoSuchMethodException noSuchMethodException) {
+                throw new RuntimeException("Failed to find method getJavaEncodingForMysqlCharset or "
+                        + "getStaticJavaEncodingForMysqlCharset for class com.mysql.cj.CharsetMapping");
+            }
+        }
+        try {
+            return (String) getCharsetMethod.invoke(null, mysqlCharsetName);
+        }
+        catch (Exception e) {
+            throw new RuntimeException("Error while invoking com.mysql.cj.CharsetMapping." + getCharsetMethod.getName(), e);
         }
     }
 
@@ -542,8 +566,9 @@ public class MySqlConnection extends JdbcConnection {
                     .without("queryInterceptors");
 
             this.jdbcConfig = JdbcConfiguration.adapt(jdbcConfigBuilder.build());
-            String driverClassName = this.jdbcConfig.getString(MySqlConnectorConfig.JDBC_DRIVER);
-            factory = JdbcConnection.patternBasedFactory(MySqlConnection.URL_PATTERN, driverClassName, getClass().getClassLoader());
+            // Diff from the original Debezium file: use the JDBC driver class set by MySqlEventReader.
+            factory = JdbcConnection.patternBasedFactory(MySqlConnection.URL_PATTERN, jdbcDriverClass.getName(),
+                    jdbcDriverClass.getClassLoader());
         }
 
         private static String determineConnectionTimeZone(final Configuration dbConfig) {

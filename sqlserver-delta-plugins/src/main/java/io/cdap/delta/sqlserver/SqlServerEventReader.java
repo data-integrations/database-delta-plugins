@@ -30,7 +30,6 @@ import io.debezium.config.Configuration;
 import io.debezium.connector.sqlserver.SourceInfo;
 import io.debezium.connector.sqlserver.SqlServerConnection;
 import io.debezium.connector.sqlserver.SqlServerConnector;
-import io.debezium.connector.sqlserver.SqlServerErrorHandler;
 import io.debezium.embedded.EmbeddedEngine;
 import io.debezium.util.Strings;
 import org.slf4j.Logger;
@@ -68,7 +67,14 @@ public class SqlServerEventReader implements EventReader {
     this.emitter = emitter;
     this.context = context;
     this.tables = tables;
-    this.executorService = Executors.newSingleThreadScheduledExecutor();
+    // Debezium 2.x loads connector classes through the thread context classloader, so the engine thread
+    // must use the plugin classloader.
+    ClassLoader pluginClassLoader = getClass().getClassLoader();
+    this.executorService = Executors.newSingleThreadScheduledExecutor(runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setContextClassLoader(pluginClassLoader);
+      return thread;
+    });
     this.failedStopping = false;
     this.debeziumConnectorConfigs = RuntimeArguments.extractPrefixed(SOURCE_CONNECTOR_PREFIX,
                                                                      context.getRuntimeArguments());
@@ -84,7 +90,6 @@ public class SqlServerEventReader implements EventReader {
     // load sql server jdbc driver into class loader and use this loaded jdbc class to set the static factory
     // variable in SqlServerConnection for instantiation purpose later on.
     Class<? extends Driver> jdbcDriverClass = context.loadPluginClass(config.getJDBCPluginId());
-    SqlServerErrorHandler.driverClassLoader = jdbcDriverClass.getClassLoader();
     SqlServerConnection.jdbcDriverClass = jdbcDriverClass;
 
 
@@ -118,10 +123,10 @@ public class SqlServerEventReader implements EventReader {
       .with("database.port", config.getPort())
       .with("database.user", config.getUser())
       .with("database.password", config.getPassword())
-      .with("database.history", DBSchemaHistory.class.getName())
-      .with("database.dbname", databaseName)
-      .with("table.whitelist", String.join(",", sourceTableMap.keySet()))
-      .with("database.server.name", "dummy") // this is the kafka topic for hosted debezium - it doesn't matter
+      .with("schema.history.internal", DBSchemaHistory.class.getName())
+      .with("database.names", databaseName)
+      .with("table.include.list", String.join(",", sourceTableMap.keySet()))
+      .with("topic.prefix", "dummy") // this is the kafka topic prefix for hosted debezium - it doesn't matter
       .with("database.serverTimezone", config.getServerTimezone())
       .with("snapshot.mode", config.getReplicateExistingData() ? "initial" : "schema_only")
       .with(SqlServerConstantOffsetBackingStore.REPLICATION_CONNECTOR_NAME, replicationConnectorName);
@@ -129,6 +134,15 @@ public class SqlServerEventReader implements EventReader {
     LOG.info("Overriding sql server connector configs with arguments {}", debeziumConnectorConfigs);
     for (Map.Entry<String, String> entry: debeziumConnectorConfigs.entrySet()) {
       configBuilder = configBuilder.with(entry.getKey(), entry.getValue());
+      // Debezium 2.x renamed these options; keep honoring the old names.
+      if (entry.getKey().equals("table.whitelist")) {
+        configBuilder = configBuilder.with("table.include.list", entry.getValue());
+      } else if (entry.getKey().equals("column.whitelist")) {
+        configBuilder = configBuilder.with("column.include.list", entry.getValue());
+      } else if (entry.getKey().startsWith("database.history.")) {
+        configBuilder = configBuilder.with(
+          "schema.history.internal." + entry.getKey().substring("database.history.".length()), entry.getValue());
+      }
     }
 
     Configuration debeziumConf = configBuilder.build();
